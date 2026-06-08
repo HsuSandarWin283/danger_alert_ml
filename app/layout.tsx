@@ -1,4 +1,5 @@
 import "./globals.css";
+import { AuthProvider } from "./auth-provider";
 
 export const metadata = {
   title: "AI Personal Safety Companion",
@@ -13,7 +14,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body>{children}</body>
+      <body>
+        <AuthProvider>{children}</AuthProvider>
+      </body>
     </html>
   );
 }
