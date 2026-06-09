@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { signupWithEmail } from '@/app/lib/auth'
+import { createUserProfile } from '@/app/lib/user-profile'
 import { useRouter } from 'next/navigation'
 
 export default function SignupForm() {
@@ -17,7 +18,10 @@ export default function SignupForm() {
     setError(null)
     setLoading(true)
     try {
-      await signupWithEmail(email, password)
+      const user = await signupWithEmail(email, password)
+      if (user) {
+        await createUserProfile(user.uid, name, email)
+      }
       router.push('/')
       router.refresh()
     } catch (err) {
