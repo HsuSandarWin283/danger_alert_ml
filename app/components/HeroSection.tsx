@@ -1,0 +1,64 @@
+"use client"
+
+import { useRouter } from 'next/navigation'
+import { useMicrophoneContext } from "@/app/lib/MicrophoneProvider"
+
+export default function HeroSection() {
+  const router = useRouter()
+  const { isRecording, recordingTime, startRecording, stopRecording, error } = useMicrophoneContext()
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
+  }
+
+  return (
+    <section className="text-center py-16 px-6 bg-gradient-to-r from-black to-gray-800 text-white">
+      <h1 className="text-5xl font-bold mb-6">
+        AI-Powered Personal Safety
+      </h1>
+
+      <p className="text-lg max-w-3xl mx-auto text-gray-300">
+        Real-time danger sound detection using CNN,
+        Mel-Spectrograms, and emergency alert systems.
+      </p>
+
+      <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
+        {isRecording ? (
+          <button
+            onClick={stopRecording}
+            className="bg-red-500 px-8 py-3 rounded-2xl text-lg hover:bg-red-600 transition"
+          >
+            Stop Listening
+          </button>
+        ) : (
+          <button
+            onClick={startRecording}
+            className="bg-red-500 px-8 py-3 rounded-2xl text-lg hover:bg-red-600 transition"
+          >
+            Start Listening
+          </button>
+        )}
+        <button
+          onClick={() => router.push('/trusted-group')}
+          className="bg-blue-600 px-8 py-3 rounded-2xl text-lg hover:bg-blue-700 transition"
+        >
+          Trusted Group
+        </button>
+      </div>
+
+      {isRecording && (
+        <div className="mt-4 text-green-400 font-mono text-lg">
+          Listening: {formatTime(recordingTime)}
+        </div>
+      )}
+
+      {error && (
+        <div className="mt-4 text-red-400 text-sm">
+          {error}
+        </div>
+      )}
+    </section>
+  )
+}

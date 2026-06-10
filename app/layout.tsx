@@ -1,5 +1,6 @@
 import "./globals.css";
 import { AuthProvider } from "./auth-provider";
+import { MicrophoneProvider } from "./lib/MicrophoneProvider";
 
 export const metadata = {
   title: "AI Personal Safety Companion",
@@ -15,7 +16,9 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <MicrophoneProvider>{children}</MicrophoneProvider>
+        </AuthProvider>
       </body>
     </html>
   );
