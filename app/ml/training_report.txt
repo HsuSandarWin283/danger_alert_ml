@@ -1,0 +1,81 @@
+Danger sound training pipeline
+Custom dataset root: D:\danger_alert_ml\app\dataset
+ESC-50 root: D:\danger_alert_ml\app\database\ESC-50-master
+Model output: D:\danger_alert_ml\app\ml\danger_sound_model.pkl
+
+ESC-50 samples loaded: 1800
+Custom samples loaded: 140
+Total samples before filtering: 1940
+Class distribution before feature extraction:
+  glass_break: 40 (2.06%)
+  gunshot: 82 (4.23%)
+  normal: 1760 (90.72%)
+  scream: 58 (2.99%)
+  Max/min class ratio: 44.00x
+  WARNING: Class imbalance is high. Balanced class weighting is enabled.
+Extracting features from 1940 samples...
+  Processed 100/1940 samples
+  Processed 200/1940 samples
+  Processed 300/1940 samples
+  Processed 400/1940 samples
+  Processed 500/1940 samples
+  Processed 600/1940 samples
+  Processed 700/1940 samples
+  Processed 800/1940 samples
+  Processed 900/1940 samples
+  Processed 1000/1940 samples
+  Processed 1100/1940 samples
+  Processed 1200/1940 samples
+  Processed 1300/1940 samples
+  Processed 1400/1940 samples
+  Processed 1500/1940 samples
+  Processed 1600/1940 samples
+  Processed 1700/1940 samples
+  Processed 1800/1940 samples
+  Processed 1900/1940 samples
+  Processed 1940/1940 samples
+  Failed feature extraction: 0 files
+  Feature vector size: 180
+
+Class distribution after successful feature extraction:
+  glass_break: 40 (2.06%)
+  gunshot: 82 (4.23%)
+  normal: 1760 (90.72%)
+  scream: 58 (2.99%)
+Group leakage summary:
+  Valid samples: 1940
+  Unique groups: 1876
+  Groups with multiple clips: 4
+  glass_break: 40 samples, 40 groups
+  gunshot: 82 samples, 18 groups
+  normal: 1760 samples, 1760 groups
+  scream: 58 samples, 58 groups
+  NOTE: Multi-clip groups are present and group-aware splitting is used.
+Evaluating with 5-fold StratifiedGroupKFold...
+  Fold 1 test counts: {np.str_('glass_break'): 8, np.str_('gunshot'): 22, np.str_('normal'): 352, np.str_('scream'): 11}
+  Fold 2 test counts: {np.str_('glass_break'): 8, np.str_('gunshot'): 20, np.str_('normal'): 352, np.str_('scream'): 11}
+  Fold 3 test counts: {np.str_('glass_break'): 8, np.str_('gunshot'): 15, np.str_('normal'): 352, np.str_('scream'): 12}
+  Fold 4 test counts: {np.str_('glass_break'): 8, np.str_('gunshot'): 13, np.str_('normal'): 352, np.str_('scream'): 12}
+  Fold 5 test counts: {np.str_('glass_break'): 8, np.str_('gunshot'): 12, np.str_('normal'): 352, np.str_('scream'): 12}
+
+Confusion matrix:
+Labels: glass_break, gunshot, normal, scream
+[[14, 0, 26, 0], [0, 73, 9, 0], [0, 0, 1760, 0], [0, 0, 50, 8]]
+
+Classification report:
+              precision    recall  f1-score   support
+
+ glass_break     1.0000    0.3500    0.5185        40
+     gunshot     1.0000    0.8902    0.9419        82
+      normal     0.9539    1.0000    0.9764      1760
+      scream     1.0000    0.1379    0.2424        58
+
+    accuracy                         0.9562      1940
+   macro avg     0.9885    0.5945    0.6698      1940
+weighted avg     0.9582    0.9562    0.9436      1940
+
+Deleted old model file: D:\danger_alert_ml\app\ml\danger_sound_model.pkl
+
+Model saved to: D:\danger_alert_ml\app\ml\danger_sound_model.pkl
+Saved classes: ['glass_break', 'gunshot', 'normal', 'scream']
+Feature version: mfcc20_delta_delta2_chroma_contrast_tonnetz_stats_v1
