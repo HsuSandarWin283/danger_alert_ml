@@ -3,7 +3,7 @@
 import { useMicrophoneContext } from "@/app/lib/MicrophoneProvider"
 
 export default function MicrophoneMonitor() {
-  const { isRecording, recordingTime, permissionState, startRecording, stopRecording, error } = useMicrophoneContext()
+  const { isRecording, recordingTime, permissionState, rmsLevel, lastPrediction, startRecording, stopRecording, error } = useMicrophoneContext()
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
@@ -15,13 +15,13 @@ export default function MicrophoneMonitor() {
     <div className="max-w-2xl mx-auto px-6 py-10">
       <div className="bg-white rounded-3xl shadow-lg p-8">
         <h1 className="text-3xl font-bold mb-6 text-center">Microphone Monitor</h1>
-        
+
         <div className="mb-6">
           <div className="flex items-center justify-center gap-2 mb-4">
             <span className="text-sm font-medium text-gray-600">Status:</span>
             <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-              isRecording 
-                ? "bg-green-100 text-green-800" 
+              isRecording
+                ? "bg-green-100 text-green-800"
                 : "bg-gray-100 text-gray-800"
             }`}>
               {isRecording ? "Active" : "Inactive"}
@@ -51,6 +51,20 @@ export default function MicrophoneMonitor() {
               </span>
             </div>
           )}
+
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className="bg-gray-50 rounded-xl p-4">
+              <p className="text-sm text-gray-500">RMS Level</p>
+              <p className="text-xl font-bold">{rmsLevel.toFixed(4)}</p>
+            </div>
+
+            <div className="bg-gray-50 rounded-xl p-4">
+              <p className="text-sm text-gray-500">Last Prediction</p>
+              <p className="text-xl font-bold">
+                {lastPrediction ? `${lastPrediction.prediction} (${Math.round(lastPrediction.confidence * 100)}%)` : 'None'}
+              </p>
+            </div>
+          </div>
 
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">

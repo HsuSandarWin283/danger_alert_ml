@@ -1,8 +1,9 @@
 "use client"
 
-import { createContext, useContext, useState, useRef, useCallback } from "react"
+import { createContext, useContext } from "react"
+import { useDangerSoundMonitor } from "@/app/lib/useDangerSoundMonitor"
 
-interface PredictionResult {
+type PredictionResult = {
   prediction: string
   confidence: number
   probabilities: Record<string, number>
@@ -14,6 +15,8 @@ interface MicrophoneContextValue {
   permissionState: "granted" | "denied" | "prompt" | "unknown"
   error: string | null
   audioBlob: Blob | null
+  rmsLevel: number
+  lastPrediction: PredictionResult | null
   startRecording: () => Promise<void>
   stopRecording: () => void
   predictAudio: () => Promise<PredictionResult | null>
@@ -22,110 +25,44 @@ interface MicrophoneContextValue {
 const MicrophoneContext = createContext<MicrophoneContextValue | null>(null)
 
 export function MicrophoneProvider({ children }: { children: React.ReactNode }) {
-  const [isRecording, setIsRecording] = useState(false)
-  const [recordingTime, setRecordingTime] = useState(0)
-  const [permissionState, setPermissionState] = useState<"granted" | "denied" | "prompt" | "unknown">("unknown")
-  const [error, setError] = useState<string | null>(null)
-  const [audioBlob, setAudioBlob] = useState<Blob | null>(null)
-  
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const streamRef = useRef<MediaStream | null>(null)
-  const timerRef = useRef<NodeJS.Timeout | null>(null)
-  const audioChunksRef = useRef<Blob[]>([])
+  const {
+    isMonitoring,
+    isRecording,
+    rmsLevel,
+    lastPrediction,
+    error,
+    startMonitoring,
+    stopMonitoring,
+  } = useDangerSoundMonitor()
 
-  const predictAudio = useCallback(async () => {
-    if (!audioBlob) return null
-    
-    const formData = new FormData()
-    formData.append("file", audioBlob, "recording.wav")
-    
-    try {
-      const res = await fetch("http://localhost:8000/predict", {
-        method: "POST",
-        body: formData
-      })
-      return await res.json()
-    } catch (err) {
-      console.error("Prediction failed:", err)
-      return null
-    }
-  }, [audioBlob])
+  const predictAudio = async () => {
+    if (!lastPrediction) return null
 
-  const startRecording = useCallback(async () => {
-    setError(null)
-    audioChunksRef.current = []
-    
-    if (!window?.navigator?.mediaDevices?.getUserMedia) {
-      setError("Microphone API not available. Requires secure context (HTTPS).")
-      setPermissionState("denied")
-      return
+    return {
+      prediction: lastPrediction.prediction,
+      confidence: lastPrediction.confidence,
+      probabilities: lastPrediction.probabilities || {},
     }
-    
-    try {
-      const stream = await window.navigator.mediaDevices.getUserMedia({ audio: true })
-      streamRef.current = stream
-      setPermissionState("granted")
-      
-      if (!window.MediaRecorder) {
-        setError("MediaRecorder API not supported in this browser")
-        setPermissionState("denied")
-        return
-      }
-      
-      const mediaRecorder = new MediaRecorder(stream)
-      mediaRecorderRef.current = mediaRecorder
-      
-      mediaRecorder.ondataavailable = (event) => {
-        audioChunksRef.current.push(event.data)
-      }
-      
-      mediaRecorder.start()
-      setIsRecording(true)
-      setRecordingTime(0)
-      
-      timerRef.current = setInterval(() => {
-        setRecordingTime((prev) => prev + 1)
-      }, 1000)
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to access microphone"
-      setError(errorMessage)
-      setPermissionState("denied")
-    }
-  }, [])
-
-  const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current) {
-      mediaRecorderRef.current.stop()
-    }
-    
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop())
-      streamRef.current = null
-    }
-    
-    setIsRecording(false)
-    
-    if (timerRef.current) {
-      clearInterval(timerRef.current)
-      timerRef.current = null
-    }
-    
-    setTimeout(() => {
-      const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
-      setAudioBlob(blob)
-    }, 100)
-  }, [])
+  }
 
   return (
     <MicrophoneContext.Provider
       value={{
-        isRecording,
-        recordingTime,
-        permissionState,
+        isRecording: isMonitoring || isRecording,
+        recordingTime: 0,
+        permissionState: isRecording ? "granted" : "unknown",
         error,
-        audioBlob,
-        startRecording,
-        stopRecording,
+        audioBlob: null,
+        rmsLevel,
+        lastPrediction: lastPrediction
+          ? {
+              prediction: lastPrediction.prediction,
+              confidence: lastPrediction.confidence,
+              probabilities: lastPrediction.probabilities || {},
+            }
+          : null,
+        startRecording: startMonitoring,
+        stopRecording: stopMonitoring,
         predictAudio,
       }}
     >

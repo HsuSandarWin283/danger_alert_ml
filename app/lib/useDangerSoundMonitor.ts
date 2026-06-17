@@ -1,171 +1,215 @@
-'use client'
+'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 type PredictionResponse = {
-  prediction: string
-  confidence: number
-  probabilities?: Record<string, number>
-  rms?: number
-}
+  prediction: string;
+  confidence: number;
+  probabilities?: Record<string, number>;
+  rms?: number;
+};
 
 export type DangerAlertPayload = {
-  detectedAnswer: string
-  confidence: number
-  probabilities?: Record<string, number>
-  rms: number
-}
+  detectedAnswer: string;
+  confidence: number;
+  probabilities?: Record<string, number>;
+  rms: number;
+};
 
 type PredictionApiResponse = {
-  prediction?: string
-  detectedAnswer?: string
-  answer?: string
-  confidence?: number
-  score?: number
-  probability?: number
-  probabilities?: Record<string, number>
-  [key: string]: unknown
-}
+  prediction?: string;
+  detectedAnswer?: string;
+  answer?: string;
+  confidence?: number;
+  score?: number;
+  probability?: number;
+  probabilities?: Record<string, number>;
+  [key: string]: unknown;
+};
 
 type UseDangerSoundMonitorReturn = {
-  isMonitoring: boolean
-  isRecording: boolean
-  rmsLevel: number
-  lastPrediction: PredictionResponse | null
-  error: string | null
-  startMonitoring: () => Promise<void>
-  stopMonitoring: () => void
-}
+  isMonitoring: boolean;
+  isRecording: boolean;
+  rmsLevel: number;
+  lastPrediction: PredictionResponse | null;
+  error: string | null;
+  startMonitoring: () => Promise<void>;
+  stopMonitoring: () => void;
+};
 
-const DEFAULT_PREDICT_URL = 'http://localhost:8000/predict'
-const CHUNK_MS = 2000
-const RMS_CHECK_MS = 200
-const RMS_THRESHOLD = 0.015
-const CONFIDENCE_THRESHOLD = 0.8
-const DUPLICATE_ALERT_MS = 10000
-const DANGER_LABELS = new Set(['gunshot', 'scream', 'glass_break'])
+const DEFAULT_PREDICT_URL = 'http://localhost:8000/predict';
+const CHUNK_MS = 5000;
+const RMS_CHECK_MS = 200;
+const SCRIPT_PROCESSOR_BUFFER_SIZE = 4096;
+const RMS_THRESHOLD = 0.015;
+const CONFIDENCE_THRESHOLD = 0.8;
+const DUPLICATE_ALERT_MS = 10000;
+const DANGER_LABELS = new Set(['gunshot', 'scream', 'glass_break']);
 
 function getPredictUrl() {
-  return process.env.NEXT_PUBLIC_DANGER_PREDICT_URL || DEFAULT_PREDICT_URL
+  return process.env.NEXT_PUBLIC_DANGER_PREDICT_URL || DEFAULT_PREDICT_URL;
 }
 
 function calculateRms(samples: Float32Array | number[]) {
-  let sum = 0
+  if (samples.length === 0) return 0;
+
+  let sum = 0;
 
   for (let i = 0; i < samples.length; i += 1) {
-    const sample = Number(samples[i])
-    sum += sample * sample
+    const sample = Number(samples[i]);
+    sum += sample * sample;
   }
 
-  return Math.sqrt(sum / samples.length)
+  return Math.sqrt(sum / samples.length);
 }
 
-async function calculateBlobRms(blob: Blob, audioContext: AudioContext) {
-  const arrayBuffer = await blob.arrayBuffer()
-  const audioBuffer = await audioContext.decodeAudioData(arrayBuffer)
-  const channel = audioBuffer.getChannelData(0)
-  return calculateRms(channel)
-}
+function samplesToWavBlob(samples: number[], sampleRate: number) {
+  const numberOfChannels = 1;
+  const bytesPerSample = 2;
+  const blockAlign = numberOfChannels * bytesPerSample;
+  const dataSize = samples.length * blockAlign;
+  const arrayBuffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(arrayBuffer);
 
-function getSupportedMimeType() {
-  const mimeTypes = [
-    'audio/webm;codecs=opus',
-    'audio/webm',
-    'audio/ogg;codecs=opus',
-    'audio/mp4',
-  ]
+  const writeString = (offset: number, value: string) => {
+    for (let i = 0; i < value.length; i += 1) {
+      view.setUint8(offset + i, value.charCodeAt(i));
+    }
+  };
 
-  if (!window.MediaRecorder || !window.MediaRecorder.isTypeSupported) {
-    return ''
+  writeString(0, 'RIFF');
+  view.setUint32(4, 36 + dataSize, true);
+  writeString(8, 'WAVE');
+  writeString(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, numberOfChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * blockAlign, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bytesPerSample * 8, true);
+  writeString(36, 'data');
+  view.setUint32(40, dataSize, true);
+
+  let offset = 44;
+
+  for (let i = 0; i < samples.length; i += 1) {
+    const sample = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+    offset += 2;
   }
 
-  return mimeTypes.find((mimeType) => window.MediaRecorder.isTypeSupported(mimeType)) || ''
+  return new Blob([view], { type: 'audio/wav' });
 }
 
 function normalizeLabel(value: string) {
-  return value.toLowerCase().trim().replace(/[\s-]+/g, '_')
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[\s-]+/g, '_');
 }
 
 function formatLabel(value: string) {
-  return value
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+  return value.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function normalizePrediction(data: PredictionApiResponse): PredictionResponse {
   const prediction = normalizeLabel(
     String(data?.prediction ?? data?.detectedAnswer ?? data?.answer ?? ''),
-  )
-  const confidence = Number(data?.confidence ?? data?.score ?? data?.probability ?? 0)
+  );
+  const confidence = Number(data?.confidence ?? data?.score ?? data?.probability ?? 0);
 
   return {
     prediction,
     confidence,
     probabilities: data?.probabilities || {},
-  }
+  };
 }
 
 export function useDangerSoundMonitor(
   onDangerDetected?: (payload: DangerAlertPayload) => void,
 ): UseDangerSoundMonitorReturn {
-  const [isMonitoring, setIsMonitoring] = useState(false)
-  const [isRecording, setIsRecording] = useState(false)
-  const [rmsLevel, setRmsLevel] = useState(0)
-  const [lastPrediction, setLastPrediction] = useState<PredictionResponse | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [isMonitoring, setIsMonitoring] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [rmsLevel, setRmsLevel] = useState(0);
+  const [lastPrediction, setLastPrediction] = useState<PredictionResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const streamRef = useRef<MediaStream | null>(null)
-  const audioContextRef = useRef<AudioContext | null>(null)
-  const intervalRef = useRef<number | null>(null)
-  const currentRmsRef = useRef(0)
-  const isPredictingRef = useRef(false)
-  const lastAlertRef = useRef<{ label: string; timestamp: number } | null>(null)
-  const mountedRef = useRef(false)
+  const streamRef = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const silentGainRef = useRef<GainNode | null>(null);
+  const intervalRef = useRef<number | null>(null);
+  const rmsIntervalRef = useRef<number | null>(null);
+  const pendingSamplesRef = useRef<number[]>([]);
+  const currentRmsRef = useRef(0);
+  const isPredictingRef = useRef(false);
+  const lastAlertRef = useRef<{ label: string; timestamp: number } | null>(null);
+  const mountedRef = useRef(false);
 
   const stopMonitoring = useCallback(() => {
     if (intervalRef.current !== null) {
-      window.clearInterval(intervalRef.current)
-      intervalRef.current = null
+      window.clearInterval(intervalRef.current);
+      intervalRef.current = null;
     }
 
-    const recorder = mediaRecorderRef.current
-    if (recorder && recorder.state !== 'inactive') {
-      recorder.stop()
+    if (rmsIntervalRef.current !== null) {
+      window.clearInterval(rmsIntervalRef.current);
+      rmsIntervalRef.current = null;
     }
-    mediaRecorderRef.current = null
 
-    streamRef.current?.getTracks().forEach((track) => track.stop())
-    streamRef.current = null
+    try {
+      processorRef.current?.disconnect();
+      sourceRef.current?.disconnect();
+      analyserRef.current?.disconnect();
+      silentGainRef.current?.disconnect();
+    } catch {
+      // Ignore disconnect errors during cleanup.
+    }
 
-    audioContextRef.current?.close().catch(() => undefined)
-    audioContextRef.current = null
+    processorRef.current = null;
+    sourceRef.current = null;
+    analyserRef.current = null;
+    silentGainRef.current = null;
 
-    isPredictingRef.current = false
-    setIsRecording(false)
-    setIsMonitoring(false)
-  }, [])
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+
+    audioContextRef.current?.close().catch(() => undefined);
+    audioContextRef.current = null;
+    pendingSamplesRef.current = [];
+    isPredictingRef.current = false;
+    setIsRecording(false);
+    setIsMonitoring(false);
+  }, []);
 
   useEffect(() => {
-    mountedRef.current = true
+    mountedRef.current = true;
 
     return () => {
-      mountedRef.current = false
-      stopMonitoring()
-    }
-  }, [stopMonitoring])
+      mountedRef.current = false;
+      stopMonitoring();
+    };
+  }, [stopMonitoring]);
 
   const startMonitoring = useCallback(async () => {
-    setError(null)
+    setError(null);
+    stopMonitoring();
 
     if (!window.navigator?.mediaDevices?.getUserMedia) {
-      setError('Microphone API is not available in this browser.')
-      return
+      setError('Microphone API is not available in this browser.');
+      return;
     }
 
-    if (!window.MediaRecorder) {
-      setError('MediaRecorder API is not supported in this browser.')
-      return
+    const AudioContextConstructor =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+
+    if (!AudioContextConstructor) {
+      setError('AudioContext API is not available in this browser.');
+      return;
     }
 
     try {
@@ -175,128 +219,160 @@ export function useDangerSoundMonitor(
           noiseSuppression: true,
           autoGainControl: true,
         },
-      })
+      });
 
-      streamRef.current = stream
+      streamRef.current = stream;
 
-      const AudioContextConstructor =
-        window.AudioContext ||
-        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+      const audioContext = new AudioContextConstructor();
+      audioContextRef.current = audioContext;
 
-      if (!AudioContextConstructor) {
-        throw new Error('AudioContext API is not available in this browser.')
-      }
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 1024;
+      analyserRef.current = analyser;
 
-      const audioContext = new AudioContextConstructor()
-      audioContextRef.current = audioContext
+      const source = audioContext.createMediaStreamSource(stream);
+      sourceRef.current = source;
 
-      const analyser = audioContext.createAnalyser()
-      analyser.fftSize = 1024
-      const analyserData = new Float32Array(analyser.fftSize)
-      const source = audioContext.createMediaStreamSource(stream)
-      source.connect(analyser)
+      const processor = audioContext.createScriptProcessor(SCRIPT_PROCESSOR_BUFFER_SIZE, 1, 1);
+      processorRef.current = processor;
 
-      intervalRef.current = window.setInterval(() => {
-        analyser.getFloatTimeDomainData(analyserData)
-        const rms = calculateRms(analyserData)
-        currentRmsRef.current = rms
-        setRmsLevel(rms)
-      }, RMS_CHECK_MS)
+      const silentGain = audioContext.createGain();
+      silentGain.gain.value = 0;
+      silentGainRef.current = silentGain;
 
-      const mimeType = getSupportedMimeType()
-      const recorder = mimeType
-        ? new MediaRecorder(stream, { mimeType })
-        : new MediaRecorder(stream)
+      source.connect(analyser);
+      source.connect(processor);
+      processor.connect(silentGain);
+      silentGain.connect(audioContext.destination);
 
-      mediaRecorderRef.current = recorder
+      const analyserData = new Float32Array(analyser.fftSize);
 
-      recorder.ondataavailable = async (event) => {
-        if (!event.data || event.data.size === 0 || isPredictingRef.current) {
-          return
+      rmsIntervalRef.current = window.setInterval(() => {
+        analyser.getFloatTimeDomainData(analyserData);
+        const rms = calculateRms(analyserData);
+        currentRmsRef.current = rms;
+        setRmsLevel(rms);
+      }, RMS_CHECK_MS);
+
+      processor.onaudioprocess = (event) => {
+        const input = event.inputBuffer.getChannelData(0);
+        const maxSamples = audioContext.sampleRate * 2;
+
+        for (let i = 0; i < input.length; i += 1) {
+          pendingSamplesRef.current.push(input[i]);
         }
 
-        const blob = event.data
-        const rms = await calculateBlobRms(blob, audioContext).catch(() => currentRmsRef.current)
+        if (pendingSamplesRef.current.length > maxSamples) {
+          pendingSamplesRef.current.splice(0, pendingSamplesRef.current.length - maxSamples);
+        }
+      };
 
-        currentRmsRef.current = rms
-        setRmsLevel(rms)
+      const processChunk = () => {
+        if (pendingSamplesRef.current.length < audioContext.sampleRate * 1) {
+          return;
+        }
+
+        if (pendingSamplesRef.current.length > audioContext.sampleRate * 2) {
+          pendingSamplesRef.current.splice(
+            0,
+            pendingSamplesRef.current.length - audioContext.sampleRate * 1,
+          );
+        }
+
+        if (isPredictingRef.current) {
+          return;
+        }
+
+        const samples = pendingSamplesRef.current.splice(0, audioContext.sampleRate * 5);
+        const rms = calculateRms(samples);
+
+        currentRmsRef.current = rms;
+        setRmsLevel(rms);
 
         if (rms < RMS_THRESHOLD) {
-          return
+          return;
         }
 
-        isPredictingRef.current = true
+        isPredictingRef.current = true;
 
-        try {
-          const formData = new FormData()
-          formData.append('file', blob, `monitoring-${Date.now()}.webm`)
+        const sendPrediction = async () => {
+          try {
+            const formData = new FormData();
+            const wavBlob = samplesToWavBlob(samples, audioContext.sampleRate);
+            console.log('sampleRate', audioContext.sampleRate);
+            console.log('wav size', wavBlob.size);
+            console.log('wav type', wavBlob.type);
+            formData.append('file', wavBlob, `monitoring-${Date.now()}.wav`);
 
-          const response = await fetch(getPredictUrl(), {
-            method: 'POST',
-            body: formData,
-          })
+            const response = await fetch(getPredictUrl(), {
+              method: 'POST',
+              body: formData,
+            });
 
-          if (!response.ok) {
-            throw new Error(`Prediction failed with status ${response.status}`)
-          }
+            if (!response.ok) {
+              throw new Error(`Prediction failed with status ${response.status}`);
+            }
 
-          const data = await response.json()
-          const prediction = normalizePrediction(data)
-          prediction.rms = rms
-          setLastPrediction(prediction)
+            const data = await response.json();
+            const prediction = normalizePrediction(data);
+            prediction.rms = rms;
+            setLastPrediction(prediction);
 
-          if (
-            DANGER_LABELS.has(prediction.prediction) &&
-            prediction.confidence >= CONFIDENCE_THRESHOLD
-          ) {
-            const now = Date.now()
-            const lastAlert = lastAlertRef.current
-            const isDuplicate =
-              lastAlert &&
-              lastAlert.label === prediction.prediction &&
-              now - lastAlert.timestamp < DUPLICATE_ALERT_MS
+            if (
+              DANGER_LABELS.has(prediction.prediction) &&
+              prediction.confidence >= CONFIDENCE_THRESHOLD
+            ) {
+              const now = Date.now();
+              const lastAlert = lastAlertRef.current;
+              const isDuplicate =
+                lastAlert &&
+                lastAlert.label === prediction.prediction &&
+                now - lastAlert.timestamp < DUPLICATE_ALERT_MS;
 
-            if (!isDuplicate) {
-              lastAlertRef.current = {
-                label: prediction.prediction,
-                timestamp: now,
-              }
+              if (!isDuplicate) {
+                lastAlertRef.current = {
+                  label: prediction.prediction,
+                  timestamp: now,
+                };
 
-              const payload: DangerAlertPayload = {
-                detectedAnswer: formatLabel(prediction.prediction),
-                confidence: prediction.confidence,
-                probabilities: prediction.probabilities,
-                rms,
-              }
+                const payload: DangerAlertPayload = {
+                  detectedAnswer: formatLabel(prediction.prediction),
+                  confidence: prediction.confidence,
+                  probabilities: prediction.probabilities,
+                  rms,
+                };
 
-              window.dispatchEvent(
-                new CustomEvent('danger-detected', {
-                  detail: payload,
-                }),
-              )
+                window.dispatchEvent(
+                  new CustomEvent('danger-detected', {
+                    detail: payload,
+                  }),
+                );
 
-              if (mountedRef.current) {
-                onDangerDetected?.(payload)
+                if (mountedRef.current) {
+                  onDangerDetected?.(payload);
+                }
               }
             }
+          } catch (err) {
+            const message = err instanceof Error ? err.message : 'Prediction failed';
+            setError(message);
+          } finally {
+            isPredictingRef.current = false;
           }
-        } catch (err) {
-          const message = err instanceof Error ? err.message : 'Prediction failed'
-          setError(message)
-        } finally {
-          isPredictingRef.current = false
-        }
-      }
+        };
 
-      recorder.start(CHUNK_MS)
-      setIsRecording(true)
-      setIsMonitoring(true)
+        void sendPrediction();
+      };
+
+      intervalRef.current = window.setInterval(processChunk, CHUNK_MS);
+      setIsRecording(true);
+      setIsMonitoring(true);
     } catch (err) {
-      stopMonitoring()
-      const message = err instanceof Error ? err.message : 'Failed to start microphone monitoring'
-      setError(message)
+      stopMonitoring();
+      const message = err instanceof Error ? err.message : 'Failed to start microphone monitoring';
+      setError(message);
     }
-  }, [onDangerDetected, stopMonitoring])
+  }, [onDangerDetected, stopMonitoring]);
 
   return {
     isMonitoring,
@@ -306,5 +382,5 @@ export function useDangerSoundMonitor(
     error,
     startMonitoring,
     stopMonitoring,
-  }
+  };
 }

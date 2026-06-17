@@ -7,11 +7,36 @@ N_MFCC = 20
 N_FFT = 2048
 HOP_LENGTH = 512
 FEATURE_VERSION = "mfcc20_delta_delta2_chroma_contrast_tonnetz_stats_v1"
+EXPECTED_FEATURE_DIM = 180
 
 
 def _stats(values):
     values = np.nan_to_num(values, nan=0.0, posinf=0.0, neginf=0.0)
     return np.concatenate([values.mean(axis=1), values.std(axis=1)]).astype(np.float32)
+
+
+def get_audio_info(audio_path):
+    signal, sample_rate = librosa.load(
+        audio_path,
+        sr=None,
+        mono=False,
+        duration=None,
+        res_type="soxr_hq",
+    )
+
+    if signal.ndim == 1:
+        channels = 1
+        sample_count = signal.shape[0]
+    else:
+        channels = signal.shape[0]
+        sample_count = signal.shape[1]
+
+    return {
+        "sample_rate": int(sample_rate),
+        "channels": int(channels),
+        "duration": float(sample_count / sample_rate),
+        "sample_count": int(sample_count),
+    }
 
 
 def extract_features(audio_path, sr=SAMPLE_RATE, duration=CLIP_DURATION, n_mfcc=N_MFCC):
