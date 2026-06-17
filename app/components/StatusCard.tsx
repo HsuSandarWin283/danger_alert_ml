@@ -3,7 +3,12 @@
 import { useEffect, useState } from "react"
 import { useMicrophoneContext } from "@/app/lib/MicrophoneProvider"
 
-export default function StatusCard() {
+type StatusCardProps = {
+  isMonitoring?: boolean
+  error?: string | null
+}
+
+export default function StatusCard({ isMonitoring = false, error = null }: StatusCardProps) {
   const { isRecording } = useMicrophoneContext()
   const [apiStatus, setApiStatus] = useState("checking")
 
@@ -21,6 +26,8 @@ export default function StatusCard() {
     checkHealth()
   }, [])
 
+  const microphoneActive = isMonitoring || isRecording
+
   return (
     <div className="bg-white rounded-3xl shadow-lg p-8">
       <h2 className="text-3xl font-bold mb-6">
@@ -31,9 +38,9 @@ export default function StatusCard() {
         <div className="flex justify-between">
           <span>Microphone</span>
           <span className={`font-bold ${
-            isRecording ? "text-green-600" : "text-red-600"
+            microphoneActive ? "text-green-600" : "text-gray-500"
           }`}>
-            {isRecording ? "Active" : "Inactive"}
+            {microphoneActive ? "Active" : "Inactive"}
           </span>
         </div>
 
@@ -50,6 +57,12 @@ export default function StatusCard() {
           <span>Environment</span>
           <span className="text-yellow-500 font-bold">Monitoring</span>
         </div>
+
+        {error && (
+          <div className="bg-red-50 text-red-700 rounded-xl p-3 text-sm">
+            {error}
+          </div>
+        )}
       </div>
     </div>
   );
