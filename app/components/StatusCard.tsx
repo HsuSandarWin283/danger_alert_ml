@@ -12,10 +12,13 @@ export default function StatusCard({ isMonitoring = false, error = null }: Statu
   const { isRecording } = useMicrophoneContext()
   const [apiStatus, setApiStatus] = useState("checking")
 
+  const apiBaseUrl =
+    process.env.NEXT_PUBLIC_DANGER_API_URL || 'https://danger-alert-ml.onrender.com';
+
   useEffect(() => {
     const checkHealth = async () => {
       try {
-        const res = await fetch("http://localhost:8000/health")
+        const res = await fetch(`${apiBaseUrl}/health`)
         const data = await res.json()
         setApiStatus(data.status === "healthy" ? "healthy" : "unhealthy")
       } catch (err) {
@@ -24,7 +27,7 @@ export default function StatusCard({ isMonitoring = false, error = null }: Statu
       }
     }
     checkHealth()
-  }, [])
+  }, [apiBaseUrl])
 
   const microphoneActive = isMonitoring || isRecording
 

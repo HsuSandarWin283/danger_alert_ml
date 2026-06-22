@@ -67,7 +67,7 @@ export default function Home() {
         />
       </div>
 
-      <section className="max-w-6xl mx-auto px-6 py-6">
+      {/* <section className="max-w-6xl mx-auto px-6 py-6">
         <div className="bg-white rounded-3xl shadow-lg p-8">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
             <div>
@@ -122,7 +122,7 @@ export default function Home() {
             </div>
           )}
         </div>
-      </section>
+      </section> */}
 
       <AudioVisualizer />
       <Footer />

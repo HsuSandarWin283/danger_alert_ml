@@ -35,9 +35,9 @@ export default function HeroSection() {
         ) : (
           <button
             onClick={startRecording}
-            className="bg-red-500 px-8 py-3 rounded-2xl text-lg hover:bg-red-600 transition"
+            className="bg-green-500 px-8 py-3 rounded-2xl text-lg hover:bg-green-600 transition"
           >
-            Start Listening
+            Start Monitoring
           </button>
         )}
         <button
@@ -50,7 +50,7 @@ export default function HeroSection() {
 
       {isRecording && (
         <div className="mt-4 text-green-400 font-mono text-lg">
-          Listening: {formatTime(recordingTime)}
+          Monitoring...
         </div>
       )}
 

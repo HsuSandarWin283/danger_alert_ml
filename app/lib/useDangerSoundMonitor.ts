@@ -37,7 +37,7 @@ type UseDangerSoundMonitorReturn = {
   stopMonitoring: () => void;
 };
 
-const DEFAULT_PREDICT_URL = 'http://localhost:8000/predict';
+const DEFAULT_PREDICT_URL = 'https://danger-alert-ml.onrender.com/predict';
 const CHUNK_MS = 5000;
 const RMS_CHECK_MS = 200;
 const SCRIPT_PROCESSOR_BUFFER_SIZE = 4096;
@@ -148,6 +148,7 @@ export function useDangerSoundMonitor(
   const isPredictingRef = useRef(false);
   const lastAlertRef = useRef<{ label: string; timestamp: number } | null>(null);
   const mountedRef = useRef(false);
+  const closingAudioContextsRef = useRef<WeakSet<AudioContext>>(new WeakSet());
 
   const stopMonitoring = useCallback(() => {
     if (intervalRef.current !== null) {
@@ -177,8 +178,21 @@ export function useDangerSoundMonitor(
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
 
-    audioContextRef.current?.close().catch(() => undefined);
+    const audioContext = audioContextRef.current;
     audioContextRef.current = null;
+
+    if (
+      audioContext &&
+      audioContext.state !== 'closed' &&
+      !closingAudioContextsRef.current.has(audioContext)
+    ) {
+      closingAudioContextsRef.current.add(audioContext);
+      void audioContext
+        .close()
+        .catch(() => undefined)
+        .finally(() => closingAudioContextsRef.current.delete(audioContext));
+    }
+
     pendingSamplesRef.current = [];
     isPredictingRef.current = false;
     setIsRecording(false);

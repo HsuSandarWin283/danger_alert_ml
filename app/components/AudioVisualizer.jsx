@@ -4,7 +4,7 @@ import { useMicrophoneContext } from "@/app/lib/MicrophoneProvider"
 import { useEffect, useRef } from "react"
 
 export default function AudioVisualizer() {
-  const { isRecording, lastPrediction, rmsLevel } = useMicrophoneContext()
+  const { isRecording, rmsLevel, lastPrediction } = useMicrophoneContext()
   const canvasRef = useRef(null)
   const audioContextRef = useRef(null)
   const analyserRef = useRef(null)
@@ -12,9 +12,25 @@ export default function AudioVisualizer() {
 
   useEffect(() => {
     let animationId
+    let cancelled = false
+
+    const stopStream = () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop())
+        streamRef.current = null
+      }
+    }
+
+    const closeAudioContext = () => {
+      const audioContext = audioContextRef.current
+      if (audioContext && audioContext.state !== 'closed') {
+        void audioContext.close().catch(() => undefined)
+      }
+      audioContextRef.current = null
+    }
 
     const drawSpectrogram = () => {
-      if (!canvasRef.current || !analyserRef.current) return
+      if (cancelled || !canvasRef.current || !analyserRef.current) return
       const canvas = canvasRef.current
       const ctx = canvas.getContext('2d')
       const width = canvas.width
@@ -42,29 +58,33 @@ export default function AudioVisualizer() {
     }
 
     if (isRecording) {
-      navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-        streamRef.current = stream
-        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)()
-        const source = audioContextRef.current.createMediaStreamSource(stream)
-        analyserRef.current = audioContextRef.current.createAnalyser()
-        analyserRef.current.fftSize = 256
-        source.connect(analyserRef.current)
-        drawSpectrogram()
-      })
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(stream => {
+          if (cancelled) {
+            stream.getTracks().forEach(track => track.stop())
+            return
+          }
+
+          streamRef.current = stream
+          audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)()
+          const source = audioContextRef.current.createMediaStreamSource(stream)
+          analyserRef.current = audioContextRef.current.createAnalyser()
+          analyserRef.current.fftSize = 256
+          source.connect(analyserRef.current)
+          drawSpectrogram()
+        })
+        .catch(() => undefined)
     } else {
       if (animationId) cancelAnimationFrame(animationId)
-      if (audioContextRef.current) audioContextRef.current.close()
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop())
-      }
+      closeAudioContext()
+      stopStream()
     }
 
     return () => {
+      cancelled = true
       if (animationId) cancelAnimationFrame(animationId)
-      if (audioContextRef.current) audioContextRef.current.close()
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop())
-      }
+      closeAudioContext()
+      stopStream()
     }
   }, [isRecording])
 
@@ -91,7 +111,9 @@ export default function AudioVisualizer() {
           <div className="bg-gray-50 rounded-xl p-4">
             <p className="text-sm text-gray-500">Last Prediction</p>
             <p className="text-xl font-bold">
-              {lastPrediction ? `${lastPrediction.prediction} (${Math.round(lastPrediction.confidence * 100)}%)` : 'None'}
+              {lastPrediction
+                ? `${lastPrediction.prediction} (${Math.round(lastPrediction.confidence * 100)}%)`
+                : 'Waiting for detection...'}
             </p>
           </div>
         </div>
