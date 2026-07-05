@@ -10,6 +10,7 @@
 # Start API server first
 - python -m uvicorn app.ml.main:app --host 0.0.0.0 --port 8000
 
+in another terminal
 # other terminal
 - npm run dev
 
