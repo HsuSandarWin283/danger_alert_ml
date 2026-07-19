@@ -1,5 +1,9 @@
+from __future__ import annotations
+
+import logging
 import os
 import pickle
+from typing import Any
 
 import numpy as np
 import librosa
@@ -9,12 +13,13 @@ try:
 except ImportError:
     from features import FEATURE_VERSION, get_audio_info
 
+logger = logging.getLogger(__name__)
+
 MODEL_DIR = os.path.dirname(__file__) or "."
 
-CNN_MODEL_PATH = os.path.join(MODEL_DIR, "danger_sound_cnn_model.h5")
+CNN_MODEL_PATH_PTH = os.path.join(MODEL_DIR, "danger_sound_cnn_model.pth")
 CNN_CLASSES_PATH = os.path.join(MODEL_DIR, "cnn_classes.pkl")
 CNN_SCALER_PATH = os.path.join(MODEL_DIR, "cnn_scaler_info.pkl")
-
 LEGACY_MODEL_PATH = os.path.join(MODEL_DIR, "danger_sound_model.pkl")
 
 CNN_SAMPLE_RATE = 22050
@@ -24,14 +29,92 @@ CNN_N_FFT = 2048
 CNN_HOP_LENGTH = 512
 CNN_IMG_HEIGHT = 128
 CNN_IMG_WIDTH = 128
+TARGET_LENGTH = int(CNN_SAMPLE_RATE * CNN_DURATION)
 
 _cnn_model = None
 _cnn_classes = None
 _cnn_scaler_info = None
-_model_type = None
+_model_type: str | None = None
+_device = None
 
 
-def _compute_mel_spectrogram(audio_path):
+class DangerSoundCNN:
+    _instance_class = None
+
+    @staticmethod
+    def _build_class(num_classes: int):
+        import torch
+        import torch.nn as nn
+
+        class _DangerSoundCNN(nn.Module):
+            def __init__(self, n_classes: int):
+                super().__init__()
+                self.features = nn.Sequential(
+                    nn.Conv2d(1, 32, 3, padding=1),
+                    nn.BatchNorm2d(32),
+                    nn.ReLU(inplace=True),
+                    nn.Conv2d(32, 32, 3, padding=1),
+                    nn.BatchNorm2d(32),
+                    nn.ReLU(inplace=True),
+                    nn.MaxPool2d(2),
+                    nn.Dropout2d(0.1),
+
+                    nn.Conv2d(32, 64, 3, padding=1),
+                    nn.BatchNorm2d(64),
+                    nn.ReLU(inplace=True),
+                    nn.Conv2d(64, 64, 3, padding=1),
+                    nn.BatchNorm2d(64),
+                    nn.ReLU(inplace=True),
+                    nn.MaxPool2d(2),
+                    nn.Dropout2d(0.15),
+
+                    nn.Conv2d(64, 128, 3, padding=1),
+                    nn.BatchNorm2d(128),
+                    nn.ReLU(inplace=True),
+                    nn.Conv2d(128, 128, 3, padding=1),
+                    nn.BatchNorm2d(128),
+                    nn.ReLU(inplace=True),
+                    nn.MaxPool2d(2),
+                    nn.Dropout2d(0.2),
+
+                    nn.Conv2d(128, 256, 3, padding=1),
+                    nn.BatchNorm2d(256),
+                    nn.ReLU(inplace=True),
+                    nn.AdaptiveAvgPool2d(1),
+                )
+                self.classifier = nn.Sequential(
+                    nn.Linear(256, 256),
+                    nn.ReLU(inplace=True),
+                    nn.Dropout(0.5),
+                    nn.Linear(256, 128),
+                    nn.ReLU(inplace=True),
+                    nn.Dropout(0.3),
+                    nn.Linear(128, n_classes),
+                )
+
+            def forward(self, x):
+                x = self.features(x)
+                x = x.view(x.size(0), -1)
+                return self.classifier(x)
+
+        return _DangerSoundCNN
+
+
+def _get_device():
+    global _device
+    if _device is None:
+        import torch
+        _device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    return _device
+
+
+def _compute_mel_spectrogram(audio_path: str) -> tuple[np.ndarray, dict]:
+    import soundfile as sf
+
+    raw_signal, raw_sr = sf.read(audio_path, dtype="float32", always_2d=False)
+    if raw_signal.ndim > 1:
+        raw_signal = raw_signal.mean(axis=1)
+
     signal, _ = librosa.load(
         audio_path,
         sr=CNN_SAMPLE_RATE,
@@ -40,11 +123,10 @@ def _compute_mel_spectrogram(audio_path):
         res_type="soxr_hq",
     )
 
-    target_length = int(CNN_SAMPLE_RATE * CNN_DURATION)
-    if len(signal) < target_length:
-        signal = np.pad(signal, (0, target_length - len(signal)))
+    if len(signal) < TARGET_LENGTH:
+        signal = np.pad(signal, (0, TARGET_LENGTH - len(signal)))
     else:
-        signal = signal[:target_length]
+        signal = signal[:TARGET_LENGTH]
 
     mel = librosa.feature.melspectrogram(
         y=signal,
@@ -56,38 +138,82 @@ def _compute_mel_spectrogram(audio_path):
     mel_db = librosa.power_to_db(mel, ref=np.max)
 
     from scipy.ndimage import zoom
-
     zoom_h = CNN_IMG_HEIGHT / mel_db.shape[0]
     zoom_w = CNN_IMG_WIDTH / mel_db.shape[1]
     mel_resized = zoom(mel_db, (zoom_h, zoom_w), order=1)
+    mel_final = mel_resized[:CNN_IMG_HEIGHT, :CNN_IMG_WIDTH].astype(np.float32)
 
-    mel_resized = mel_resized[:CNN_IMG_HEIGHT, :CNN_IMG_WIDTH]
+    debug_info = {
+        "raw_file_sr": int(raw_sr),
+        "raw_file_samples": len(raw_signal),
+        "raw_file_duration_sec": float(len(raw_signal) / raw_sr),
+        "raw_file_rms": float(np.sqrt(np.mean(raw_signal ** 2))),
+        "raw_file_peak": float(np.max(np.abs(raw_signal))),
+        "resampled_length": len(signal),
+        "signal_rms_after_resample": float(np.sqrt(np.mean(signal ** 2))),
+        "mel_raw_shape": list(mel_db.shape),
+        "mel_resized_shape": list(mel_final.shape),
+        "mel_min": float(mel_final.min()),
+        "mel_max": float(mel_final.max()),
+        "mel_mean": float(mel_final.mean()),
+        "mel_std": float(mel_final.std()),
+    }
 
-    return mel_resized
+    return mel_final, debug_info
 
 
-def _load_cnn_model():
-    import tensorflow as tf
+def _normalize_mel(mel: np.ndarray) -> tuple[np.ndarray, dict]:
+    debug_info = {}
+    if _cnn_scaler_info and "mean" in _cnn_scaler_info and "std" in _cnn_scaler_info:
+        mean = _cnn_scaler_info["mean"]
+        std = _cnn_scaler_info["std"]
+        debug_info["scaler_mean"] = mean
+        debug_info["scaler_std"] = std
+        if std > 0:
+            normalized = (mel - mean) / std
+            debug_info["normalized_min"] = float(normalized.min())
+            debug_info["normalized_max"] = float(normalized.max())
+            debug_info["normalized_mean"] = float(normalized.mean())
+            debug_info["normalized_std"] = float(normalized.std())
+            return normalized, debug_info
+    debug_info["scaler_applied"] = False
+    return mel, debug_info
 
-    model = tf.keras.models.load_model(CNN_MODEL_PATH)
 
-    with open(CNN_CLASSES_PATH, "rb") as f:
-        raw = pickle.load(f)
+def _load_pytorch_model() -> tuple:
+    import torch
 
-    if isinstance(raw, dict) and "classes" in raw:
-        classes = raw["classes"]
+    checkpoint = torch.load(CNN_MODEL_PATH_PTH, map_location="cpu", weights_only=False)
+
+    if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
+        state_dict = checkpoint["model_state_dict"]
+        classes = checkpoint.get("classes", [])
+        num_classes = checkpoint.get("num_classes", len(classes))
+        scaler_info = checkpoint.get("scaler_info", None)
     else:
-        classes = raw
+        state_dict = checkpoint
+        with open(CNN_CLASSES_PATH, "rb") as f:
+            raw = pickle.load(f)
+        classes = raw["classes"] if isinstance(raw, dict) and "classes" in raw else raw
+        num_classes = len(classes)
+        scaler_info = None
+        if os.path.exists(CNN_SCALER_PATH):
+            with open(CNN_SCALER_PATH, "rb") as f:
+                scaler_info = pickle.load(f)
 
-    scaler_info = None
-    if os.path.exists(CNN_SCALER_PATH):
-        with open(CNN_SCALER_PATH, "rb") as f:
-            scaler_info = pickle.load(f)
+    DangerSoundCNN._instance_class = DangerSoundCNN._build_class(num_classes)
+    model = DangerSoundCNN._instance_class(num_classes)
+    model.load_state_dict(state_dict)
 
+    device = _get_device()
+    model = model.to(device)
+    model.eval()
+
+    logger.info("PyTorch model loaded on %s with %d classes", device, num_classes)
     return model, classes, scaler_info
 
 
-def _load_legacy_model():
+def _load_legacy_model() -> tuple:
     with open(LEGACY_MODEL_PATH, "rb") as f:
         checkpoint = pickle.load(f)
 
@@ -100,53 +226,62 @@ def _load_legacy_model():
     return pipeline, classes, checkpoint
 
 
-def load_model():
+def load_model() -> None:
     global _cnn_model, _cnn_classes, _cnn_scaler_info, _model_type
 
     if _cnn_model is not None:
         return
 
-    if os.path.exists(CNN_MODEL_PATH):
-        print("Loading TensorFlow CNN model...")
-        _cnn_model, _cnn_classes, _cnn_scaler_info = _load_cnn_model()
-        _model_type = "cnn"
-
-        class_labels = [str(c) for c in _cnn_classes]
-        print(f"CNN model loaded successfully.")
-        print(f"Classes: {class_labels}")
+    if os.path.exists(CNN_MODEL_PATH_PTH):
+        logger.info("Loading PyTorch CNN model from %s", CNN_MODEL_PATH_PTH)
+        try:
+            _cnn_model, _cnn_classes, _cnn_scaler_info = _load_pytorch_model()
+            _model_type = "pytorch"
+            logger.info("PyTorch model loaded. Classes: %s", [str(c) for c in _cnn_classes])
+        except Exception as exc:
+            logger.exception("Failed to load PyTorch model")
+            raise RuntimeError(f"PyTorch model loading failed: {exc}") from exc
     elif os.path.exists(LEGACY_MODEL_PATH):
-        print("WARNING: CNN model not found. Falling back to legacy sklearn model.")
-        pipeline, classes, _ = _load_legacy_model()
-        _cnn_model = pipeline
-        _cnn_classes = classes
-        _cnn_scaler_info = None
-        _model_type = "legacy"
-
-        class_labels = [str(c) for c in _cnn_classes]
-        print(f"Legacy model loaded. Classes: {class_labels}")
+        logger.warning("PyTorch model not found. Falling back to legacy model.")
+        try:
+            _cnn_model, _cnn_classes, _ = _load_legacy_model()
+            _cnn_scaler_info = None
+            _model_type = "legacy"
+            logger.info("Legacy model loaded. Classes: %s", [str(c) for c in _cnn_classes])
+        except Exception as exc:
+            logger.exception("Failed to load legacy model")
+            raise RuntimeError(f"Legacy model loading failed: {exc}") from exc
     else:
         raise FileNotFoundError(
-            f"No model found. Expected CNN model at {CNN_MODEL_PATH} "
-            f"or legacy model at {LEGACY_MODEL_PATH}."
+            f"No model found. Expected PyTorch at {CNN_MODEL_PATH_PTH} "
+            f"or legacy at {LEGACY_MODEL_PATH}."
         )
 
 
-def _predict_cnn(audio_path):
-    mel = _compute_mel_spectrogram(audio_path)
+def _predict_pytorch(audio_path: str, debug: bool = False) -> tuple[np.ndarray, dict]:
+    import torch
 
-    if _cnn_scaler_info and "mean" in _cnn_scaler_info and "std" in _cnn_scaler_info:
-        mean = _cnn_scaler_info["mean"]
-        std = _cnn_scaler_info["std"]
-        if std > 0:
-            mel = (mel - mean) / std
+    mel, mel_debug = _compute_mel_spectrogram(audio_path)
+    mel_norm, norm_debug = _normalize_mel(mel)
 
-    mel_input = mel.reshape(1, CNN_IMG_HEIGHT, CNN_IMG_WIDTH, 1)
-    probabilities = _cnn_model.predict(mel_input, verbose=0)[0]
+    mel_input = mel_norm.reshape(1, 1, CNN_IMG_HEIGHT, CNN_IMG_WIDTH)
+    mel_tensor = torch.tensor(mel_input, dtype=torch.float32).to(_get_device())
 
-    return probabilities
+    with torch.no_grad():
+        logits = _cnn_model(mel_tensor)
+        probabilities = torch.nn.functional.softmax(logits, dim=1).cpu().numpy()[0]
+
+    all_debug = {**mel_debug, **norm_debug}
+    all_debug["tensor_shape"] = list(mel_input.shape)
+    all_debug["logits"] = logits.cpu().numpy().tolist()
+    all_debug["probabilities"] = {
+        str(c): float(p) for c, p in zip(_cnn_classes, probabilities)
+    }
+
+    return probabilities, all_debug
 
 
-def _predict_legacy(audio_path):
+def _predict_legacy(audio_path: str) -> np.ndarray:
     from .features import extract_features
 
     features = extract_features(audio_path)
@@ -154,39 +289,60 @@ def _predict_legacy(audio_path):
 
     pipeline = _cnn_model
     if hasattr(pipeline, "predict_proba"):
-        probabilities = pipeline.predict_proba(X)[0]
-    else:
-        scaler, model = pipeline
-        X_scaled = scaler.transform(X)
-        probabilities = model.predict_proba(X_scaled)[0]
+        return pipeline.predict_proba(X)[0]
 
-    return probabilities
+    scaler, model = pipeline
+    X_scaled = scaler.transform(X)
+    return model.predict_proba(X_scaled)[0]
 
 
-def predict_with_debug(audio_path):
+def predict(audio_path: str) -> dict[str, Any]:
     load_model()
 
     audio_info = get_audio_info(audio_path)
 
-    if _model_type == "cnn":
-        mel = _compute_mel_spectrogram(audio_path)
-        feature_shape = list(mel.shape)
-
-        mel_normalized = mel.copy()
-        if _cnn_scaler_info and "mean" in _cnn_scaler_info and "std" in _cnn_scaler_info:
-            mean = _cnn_scaler_info["mean"]
-            std = _cnn_scaler_info["std"]
-            if std > 0:
-                mel_normalized = (mel_normalized - mean) / std
-
-        mel_input = mel_normalized.reshape(1, CNN_IMG_HEIGHT, CNN_IMG_WIDTH, 1)
-        probabilities = _cnn_model.predict(mel_input, verbose=0)[0]
+    if _model_type == "pytorch":
+        probabilities, _debug = _predict_pytorch(audio_path)
+    elif _model_type == "legacy":
+        probabilities = _predict_legacy(audio_path)
     else:
+        raise RuntimeError(f"Unknown model type: {_model_type}")
+
+    predicted_idx = int(np.argmax(probabilities))
+    class_labels = [str(c) for c in _cnn_classes]
+    predicted_label = class_labels[predicted_idx]
+
+    feature_version = {
+        "pytorch": "cnn_mel_128x128_v2",
+    }.get(_model_type, FEATURE_VERSION)
+
+    return {
+        "prediction": predicted_label,
+        "confidence": float(probabilities[predicted_idx]),
+        "probabilities": {
+            label: float(prob) for label, prob in zip(class_labels, probabilities)
+        },
+        "feature_version": feature_version,
+    }
+
+
+def predict_with_debug(audio_path: str) -> dict[str, Any]:
+    load_model()
+
+    audio_info = get_audio_info(audio_path)
+
+    if _model_type == "pytorch":
+        import torch
+
+        probabilities, debug_info = _predict_pytorch(audio_path, debug=True)
+        feature_shape = debug_info.get("mel_resized_shape", [CNN_IMG_HEIGHT, CNN_IMG_WIDTH])
+    elif _model_type == "legacy":
         from .features import extract_features, EXPECTED_FEATURE_DIM
 
         features = extract_features(audio_path)
         feature_shape = list(features.shape)
         X = np.array([features])
+        debug_info = {}
 
         if hasattr(_cnn_model, "predict_proba"):
             probabilities = _cnn_model.predict_proba(X)[0]
@@ -194,20 +350,26 @@ def predict_with_debug(audio_path):
             scaler, model = _cnn_model
             X_scaled = scaler.transform(X)
             probabilities = model.predict_proba(X_scaled)[0]
+    else:
+        raise RuntimeError(f"Unknown model type: {_model_type}")
 
     predicted_idx = int(np.argmax(probabilities))
-    class_labels = [str(label) for label in _cnn_classes]
+    class_labels = [str(c) for c in _cnn_classes]
     predicted_label = class_labels[predicted_idx]
 
     warnings = []
     if audio_info["sample_rate"] != CNN_SAMPLE_RATE:
         warnings.append("input_sample_rate_differs_from_training_sr")
 
+    feature_version = {
+        "pytorch": "cnn_mel_128x128_v2",
+    }.get(_model_type, FEATURE_VERSION)
+
     return {
         "audio_info": audio_info,
         "feature_shape": feature_shape,
-        "feature_version": "cnn_mel_128x128_v1" if _model_type == "cnn" else FEATURE_VERSION,
-        "model_feature_version": "cnn_mel_128x128_v1" if _model_type == "cnn" else FEATURE_VERSION,
+        "feature_version": feature_version,
+        "model_feature_version": feature_version,
         "model_sample_rate": CNN_SAMPLE_RATE,
         "model_classes": class_labels,
         "class_probabilities": {
@@ -216,36 +378,15 @@ def predict_with_debug(audio_path):
         "predicted_class": predicted_label,
         "confidence": float(probabilities[predicted_idx]),
         "warnings": warnings,
-    }
-
-
-def predict(audio_path):
-    load_model()
-
-    audio_info = get_audio_info(audio_path)
-
-    if _model_type == "cnn":
-        probabilities = _predict_cnn(audio_path)
-    else:
-        probabilities = _predict_legacy(audio_path)
-
-    predicted_idx = int(np.argmax(probabilities))
-    class_labels = [str(label) for label in _cnn_classes]
-    predicted_label = class_labels[predicted_idx]
-
-    return {
-        "prediction": predicted_label,
-        "confidence": float(probabilities[predicted_idx]),
-        "probabilities": {
-            label: float(prob) for label, prob in zip(class_labels, probabilities)
-        },
-        "feature_version": "cnn_mel_128x128_v1" if _model_type == "cnn" else FEATURE_VERSION,
+        "debug": debug_info,
     }
 
 
 if __name__ == "__main__":
     import json
     import sys
+
+    logging.basicConfig(level=logging.INFO)
 
     if len(sys.argv) < 2:
         print("Usage: python predict_sound.py <audio_file> [--debug]")

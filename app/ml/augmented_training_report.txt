@@ -1,0 +1,177 @@
+============================================================
+DANGER SOUND CNN TRAINING WITH AUGMENTATION (PyTorch)
+============================================================
+ESC-50 categories loaded: 50
+Gunshot files: 933
+Scream files: 426
+Accident files: 46
+Background pool: 720 files (18 categories)
+Accident sound pool (glass_breaking + car_horn): 80 files
+Normal pool (ESC-50): 1040 files
+
+=== PHASE 1: Load audio into memory ===
+  [gunshot] 200/933 (40.6s)
+  [gunshot] 400/933 (44.3s)
+  [gunshot] 600/933 (46.7s)
+  [gunshot] 800/933 (49.0s)
+  [gunshot] loaded 933/933 (49.9s)
+  [scream] 200/426 (132.9s)
+  [scream] 400/426 (261.8s)
+  [scream] loaded 426/426 (279.7s)
+  [accident] loaded 46/46 (41.6s)
+  Background categories loaded: 18
+  [normal] 200/1040 (1.9s)
+  [normal] 400/1040 (3.4s)
+  [normal] 600/1040 (4.8s)
+  [normal] 800/1040 (6.2s)
+  [normal] 1000/1040 (7.7s)
+  [normal] loaded 1040/1040 (7.9s)
+  Total background signals: 720
+
+=== PHASE 2: Data Augmentation ===
+  gunshot: 933 originals -> generating 167 augmented (target: 1100)
+  scream: 426 originals -> generating 174 augmented (target: 600)
+
+  Accident augmentation: 46 originals -> target 500
+    accident: 200/454
+    accident: 400/454
+
+  Normal: 1040 originals -> generating 160 extra with light augmentation
+
+Total dataset size: 3400
+  accident: 500 (orig: 46, aug: 454)
+  gunshot: 1100 (orig: 933, aug: 167)
+  normal: 1200 (orig: 1040, aug: 160)
+  scream: 600 (orig: 426, aug: 174)
+
+=== PHASE 3: Mel Spectrogram Extraction ===
+  Mel: 500/3400 (failed: 0) (8.8s)
+  Mel: 1000/3400 (failed: 0) (14.2s)
+  Mel: 1500/3400 (failed: 0) (22.8s)
+  Mel: 2000/3400 (failed: 0) (28.1s)
+  Mel: 2500/3400 (failed: 0) (36.4s)
+  Mel: 3000/3400 (failed: 0) (41.6s)
+  Mel: 3400/3400 (failed: 0) (45.7s)
+Feature shape: (3400, 128, 128)
+Classes: ['accident', 'gunshot', 'normal', 'scream']
+
+=== PHASE 4: Stratified Group K-Fold Training ===
+StratifiedGroupKFold: 5 splits
+Unique groups per class: {'accident': 500, 'gunshot': 1089, 'normal': 1194, 'scream': 573}
+Device: cuda
+
+--- Fold 1/5 ---
+  Epoch   1 | t_loss=0.9368 t_acc=0.5480 | v_loss=0.9249 v_acc=0.5685 | lr=0.001000
+  Epoch  10 | t_loss=0.3429 t_acc=0.8585 | v_loss=0.3864 v_acc=0.8498 | lr=0.001000
+  Epoch  20 | t_loss=0.1714 t_acc=0.9324 | v_loss=0.2026 v_acc=0.9264 | lr=0.000500
+  Epoch  30 | t_loss=0.1394 t_acc=0.9482 | v_loss=0.2082 v_acc=0.9190 | lr=0.000500
+  Epoch  40 | t_loss=0.0964 t_acc=0.9621 | v_loss=0.1340 v_acc=0.9440 | lr=0.000250
+  Epoch  50 | t_loss=0.0589 t_acc=0.9779 | v_loss=0.1162 v_acc=0.9573 | lr=0.000063
+  Epoch  60 | t_loss=0.0526 t_acc=0.9816 | v_loss=0.1167 v_acc=0.9647 | lr=0.000031
+  Epoch  70 | t_loss=0.0422 t_acc=0.9827 | v_loss=0.1055 v_acc=0.9661 | lr=0.000016
+  Early stop at epoch 71 (best val_acc=0.9720)
+  Fold 1 val_acc=0.9720 macro_f1=0.9717
+
+--- Fold 2/5 ---
+  Epoch   1 | t_loss=0.8851 t_acc=0.5569 | v_loss=0.6338 v_acc=0.6095 | lr=0.001000
+  Epoch  10 | t_loss=0.3834 t_acc=0.8407 | v_loss=0.5001 v_acc=0.7293 | lr=0.001000
+  Epoch  20 | t_loss=0.2199 t_acc=0.9167 | v_loss=0.1715 v_acc=0.9172 | lr=0.001000
+  Epoch  30 | t_loss=0.1245 t_acc=0.9523 | v_loss=0.1263 v_acc=0.9467 | lr=0.001000
+  Epoch  40 | t_loss=0.0709 t_acc=0.9688 | v_loss=0.0861 v_acc=0.9704 | lr=0.000500
+  Epoch  50 | t_loss=0.0662 t_acc=0.9736 | v_loss=0.0770 v_acc=0.9704 | lr=0.000500
+  Epoch  60 | t_loss=0.0395 t_acc=0.9842 | v_loss=0.0695 v_acc=0.9808 | lr=0.000250
+  Epoch  70 | t_loss=0.0281 t_acc=0.9872 | v_loss=0.0546 v_acc=0.9778 | lr=0.000125
+  Epoch  80 | t_loss=0.0305 t_acc=0.9897 | v_loss=0.0474 v_acc=0.9822 | lr=0.000063
+  Fold 2 val_acc=0.9896 macro_f1=0.9887
+
+--- Fold 3/5 ---
+  Epoch   1 | t_loss=0.9770 t_acc=0.5162 | v_loss=0.9675 v_acc=0.4971 | lr=0.001000
+  Epoch  10 | t_loss=0.3035 t_acc=0.8767 | v_loss=0.2754 v_acc=0.8827 | lr=0.001000
+  Epoch  20 | t_loss=0.1306 t_acc=0.9437 | v_loss=0.0987 v_acc=0.9633 | lr=0.000500
+  Epoch  30 | t_loss=0.0777 t_acc=0.9691 | v_loss=0.0904 v_acc=0.9677 | lr=0.000500
+  Epoch  40 | t_loss=0.0678 t_acc=0.9746 | v_loss=0.1025 v_acc=0.9692 | lr=0.000500
+  Epoch  50 | t_loss=0.0538 t_acc=0.9798 | v_loss=0.0535 v_acc=0.9795 | lr=0.000250
+  Epoch  60 | t_loss=0.0255 t_acc=0.9915 | v_loss=0.0487 v_acc=0.9897 | lr=0.000125
+  Epoch  70 | t_loss=0.0178 t_acc=0.9941 | v_loss=0.0453 v_acc=0.9839 | lr=0.000063
+  Early stop at epoch 74 (best val_acc=0.9897)
+  Fold 3 val_acc=0.9897 macro_f1=0.9887
+
+--- Fold 4/5 ---
+  Epoch   1 | t_loss=0.9291 t_acc=0.5460 | v_loss=0.7341 v_acc=0.6184 | lr=0.001000
+  Epoch  10 | t_loss=0.2684 t_acc=0.8840 | v_loss=0.2971 v_acc=0.8801 | lr=0.001000
+  Epoch  20 | t_loss=0.1757 t_acc=0.9267 | v_loss=0.1907 v_acc=0.9371 | lr=0.001000
+  Epoch  30 | t_loss=0.1083 t_acc=0.9554 | v_loss=0.1128 v_acc=0.9547 | lr=0.001000
+  Epoch  40 | t_loss=0.0639 t_acc=0.9731 | v_loss=0.0640 v_acc=0.9766 | lr=0.000500
+  Epoch  50 | t_loss=0.0277 t_acc=0.9878 | v_loss=0.0540 v_acc=0.9883 | lr=0.000250
+  Epoch  60 | t_loss=0.0158 t_acc=0.9963 | v_loss=0.0548 v_acc=0.9868 | lr=0.000125
+  Epoch  70 | t_loss=0.0154 t_acc=0.9941 | v_loss=0.0510 v_acc=0.9942 | lr=0.000063
+  Early stop at epoch 77 (best val_acc=0.9942)
+  Fold 4 val_acc=0.9942 macro_f1=0.9936
+
+--- Fold 5/5 ---
+  Epoch   1 | t_loss=0.9119 t_acc=0.5432 | v_loss=0.8665 v_acc=0.5508 | lr=0.001000
+  Epoch  10 | t_loss=0.3305 t_acc=0.8747 | v_loss=0.2948 v_acc=0.8792 | lr=0.001000
+  Epoch  20 | t_loss=0.1770 t_acc=0.9324 | v_loss=0.2260 v_acc=0.9102 | lr=0.000500
+  Epoch  30 | t_loss=0.1188 t_acc=0.9511 | v_loss=0.1501 v_acc=0.9426 | lr=0.000500
+  Epoch  40 | t_loss=0.1212 t_acc=0.9592 | v_loss=0.1134 v_acc=0.9602 | lr=0.000500
+  Epoch  50 | t_loss=0.0642 t_acc=0.9754 | v_loss=0.0993 v_acc=0.9647 | lr=0.000250
+  Epoch  60 | t_loss=0.0371 t_acc=0.9827 | v_loss=0.0953 v_acc=0.9647 | lr=0.000125
+  Epoch  70 | t_loss=0.0267 t_acc=0.9912 | v_loss=0.0934 v_acc=0.9735 | lr=0.000063
+  Epoch  80 | t_loss=0.0239 t_acc=0.9912 | v_loss=0.0756 v_acc=0.9794 | lr=0.000016
+  Fold 5 val_acc=0.9794 macro_f1=0.9798
+
+=== PHASE 5: Final Evaluation (CV Aggregated) ===
+
+Overall CV Accuracy: 0.9850
+Average fold val_acc: 0.9850
+Average fold macro_f1: 0.9845
+Average epochs per fold: 76.4
+
+Classification Report (CV Aggregated):
+              precision    recall  f1-score   support
+
+    accident     0.9671    0.9980    0.9823       500
+     gunshot     0.9936    0.9855    0.9895      1100
+      normal     0.9858    0.9800    0.9829      1200
+      scream     0.9833    0.9833    0.9833       600
+
+    accuracy                         0.9850      3400
+   macro avg     0.9824    0.9867    0.9845      3400
+weighted avg     0.9851    0.9850    0.9850      3400
+
+Confusion Matrix:
+Labels: ['accident', 'gunshot', 'normal', 'scream']
+  accident: [499, 1, 0, 0]
+  gunshot: [8, 1084, 8, 0]
+  normal: [9, 5, 1176, 10]
+  scream: [0, 1, 9, 590]
+
+Per-class metrics:
+  accident: precision=0.9671 recall=0.9980 f1=0.9823 support=500
+  gunshot: precision=0.9936 recall=0.9855 f1=0.9895 support=1100
+  normal: precision=0.9858 recall=0.9800 f1=0.9829 support=1200
+  scream: precision=0.9833 recall=0.9833 f1=0.9833 support=600
+
+=== PHASE 6: Train Final Model on Full Dataset ===
+Scaler saved: /content/cnn_scaler_info.pkl
+Training final model...
+  Epoch   1 | t_loss=0.8901 t_acc=0.5588 | v_loss=0.8169 v_acc=0.5765 | lr=0.001000 (5.2s)
+  Epoch  10 | t_loss=0.2897 t_acc=0.8938 | v_loss=0.4007 v_acc=0.8196 | lr=0.001000 (51.5s)
+  Epoch  20 | t_loss=0.1708 t_acc=0.9322 | v_loss=0.1623 v_acc=0.9333 | lr=0.001000 (103.0s)
+  Epoch  30 | t_loss=0.1145 t_acc=0.9540 | v_loss=0.1083 v_acc=0.9549 | lr=0.001000 (154.4s)
+  Epoch  40 | t_loss=0.1128 t_acc=0.9599 | v_loss=0.0929 v_acc=0.9686 | lr=0.001000 (205.9s)
+  Epoch  50 | t_loss=0.0894 t_acc=0.9647 | v_loss=0.0625 v_acc=0.9824 | lr=0.001000 (257.5s)
+  Epoch  60 | t_loss=0.0263 t_acc=0.9896 | v_loss=0.0685 v_acc=0.9745 | lr=0.000500 (309.0s)
+  Epoch  70 | t_loss=0.0150 t_acc=0.9938 | v_loss=0.0537 v_acc=0.9843 | lr=0.000125 (360.4s)
+  Epoch  80 | t_loss=0.0121 t_acc=0.9941 | v_loss=0.0625 v_acc=0.9824 | lr=0.000063 (411.9s)
+
+Final model best val_acc: 0.9902
+Total training time: 2752.0s
+
+=== PHASE 7: Save Model ===
+Model saved: /content/danger_sound_cnn_model.pth
+Classes saved: /content/cnn_classes.pkl
+
+============================================================
+TRAINING COMPLETE
+============================================================

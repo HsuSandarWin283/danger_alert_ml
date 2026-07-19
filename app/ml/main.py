@@ -1,5 +1,8 @@
+import logging
 import os
+import shutil
 import tempfile
+import time
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
@@ -7,7 +10,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import uvicorn
 
-from .predict_sound import predict, predict_with_debug
+from .predict_sound import load_model, predict, predict_with_debug
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Danger Sound Detection API")
 
@@ -17,6 +26,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+DEBUG_AUDIO_DIR = Path(__file__).resolve().parent / "debug_audio"
+
+
+@app.on_event("startup")
+async def startup_load_model():
+    DEBUG_AUDIO_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        load_model()
+        logger.info("Model loaded successfully at startup")
+    except Exception as exc:
+        logger.exception("Failed to load model at startup")
 
 
 def _save_upload(file: UploadFile) -> str:
@@ -37,20 +58,42 @@ def _save_upload(file: UploadFile) -> str:
         raise
 
 
+def _save_debug_audio(src_path: str, filename: str) -> str | None:
+    try:
+        ts = int(time.time() * 1000)
+        safe_name = f"{ts}_{filename}"
+        dst = str(DEBUG_AUDIO_DIR / safe_name)
+        shutil.copy2(src_path, dst)
+        logger.info("[debug-audio] saved %s (%d bytes)", dst, os.path.getsize(dst))
+        return dst
+    except Exception as exc:
+        logger.warning("[debug-audio] failed to save: %s", exc)
+        return None
+
+
 @app.post("/predict")
 async def predict_sound(file: UploadFile = File(...)):
     tmp_path = None
 
     try:
         tmp_path = _save_upload(file)
+
+        _save_debug_audio(tmp_path, file.filename or "unknown.wav")
+
         result = predict(tmp_path)
-        print(f"[predict] filename={file.filename} result={result}")
+        logger.info(
+            "[predict] filename=%s prediction=%s confidence=%.4f probs=%s",
+            file.filename,
+            result["prediction"],
+            result["confidence"],
+            {k: f"{v:.4f}" for k, v in result.get("probabilities", {}).items()},
+        )
         return JSONResponse(content=result)
 
     except HTTPException:
         raise
     except Exception as exc:
-        print(f"[predict] error filename={file.filename} error={exc}")
+        logger.exception("[predict] error filename=%s", file.filename)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     finally:
         if tmp_path and os.path.exists(tmp_path):
@@ -63,8 +106,21 @@ async def debug_predict(file: UploadFile = File(...)):
 
     try:
         tmp_path = _save_upload(file)
+
+        _save_debug_audio(tmp_path, file.filename or "unknown.wav")
+
         result = predict_with_debug(tmp_path)
-        print(f"[debug-predict] filename={file.filename} result={result}")
+        logger.info(
+            "[debug-predict] filename=%s predicted_class=%s confidence=%.4f "
+            "audio_sr=%s audio_dur=%.2f feature_shape=%s probs=%s",
+            file.filename,
+            result["predicted_class"],
+            result["confidence"],
+            result["audio_info"].get("sample_rate"),
+            result["audio_info"].get("duration", 0),
+            result["feature_shape"],
+            {k: f"{v:.4f}" for k, v in result.get("class_probabilities", {}).items()},
+        )
 
         return {
             "filename": file.filename,
@@ -80,12 +136,13 @@ async def debug_predict(file: UploadFile = File(...)):
             "feature_version": result["feature_version"],
             "model_feature_version": result["model_feature_version"],
             "warnings": result["warnings"],
+            "debug": result.get("debug", {}),
         }
 
     except HTTPException:
         raise
     except Exception as exc:
-        print(f"[debug-predict] error filename={file.filename} error={exc}")
+        logger.exception("[debug-predict] error filename=%s", file.filename)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     finally:
         if tmp_path and os.path.exists(tmp_path):

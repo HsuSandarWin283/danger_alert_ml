@@ -270,7 +270,7 @@ export function useDangerSoundMonitor(
 
       processor.onaudioprocess = (event) => {
         const input = event.inputBuffer.getChannelData(0);
-        const maxSamples = audioContext.sampleRate * 2;
+        const maxSamples = audioContext.sampleRate * 7;
 
         for (let i = 0; i < input.length; i += 1) {
           pendingSamplesRef.current.push(input[i]);
@@ -282,22 +282,18 @@ export function useDangerSoundMonitor(
       };
 
       const processChunk = () => {
+        const targetSamples = audioContext.sampleRate * 5;
+
         if (pendingSamplesRef.current.length < audioContext.sampleRate * 1) {
           return;
-        }
-
-        if (pendingSamplesRef.current.length > audioContext.sampleRate * 2) {
-          pendingSamplesRef.current.splice(
-            0,
-            pendingSamplesRef.current.length - audioContext.sampleRate * 1,
-          );
         }
 
         if (isPredictingRef.current) {
           return;
         }
 
-        const samples = pendingSamplesRef.current.splice(0, audioContext.sampleRate * 5);
+        const count = Math.min(pendingSamplesRef.current.length, targetSamples);
+        const samples = pendingSamplesRef.current.splice(0, count);
         const rms = calculateRms(samples);
 
         currentRmsRef.current = rms;
@@ -378,7 +374,7 @@ export function useDangerSoundMonitor(
         void sendPrediction();
       };
 
-      intervalRef.current = window.setInterval(processChunk, CHUNK_MS);
+      intervalRef.current = window.setInterval(processChunk, 1000);
       setIsRecording(true);
       setIsMonitoring(true);
     } catch (err) {
