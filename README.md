@@ -15,6 +15,8 @@ NEXT_PUBLIC_DANGER_PREDICT_URL=http://Your IPv4 Address:8000/predict
 # Start API server first
 - python -m uvicorn app.ml.main:app --host 0.0.0.0 --port 8000
 
+- "C:\Users\Hsu Sandar Win\AppData\Local\Python\bin\python.exe" -m uvicorn app.ml.main:app --reload --host 0.0.0.0 --port 8000
+
 in another terminal
 # other terminal
 - npm run dev
