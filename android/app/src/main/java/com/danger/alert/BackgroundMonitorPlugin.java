@@ -52,6 +52,24 @@ public class BackgroundMonitorPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void saveFirebaseConfig(PluginCall call) {
+        String apiKey = call.getString("apiKey", "");
+        String projectId = call.getString("projectId", "");
+        String userId = call.getString("userId", "");
+
+        getContext().getSharedPreferences("capacitor", android.content.Context.MODE_PRIVATE)
+                .edit()
+                .putString("firebase_api_key", apiKey)
+                .putString("firebase_project_id", projectId)
+                .putString("current_user_id", userId)
+                .apply();
+
+        JSObject result = new JSObject();
+        result.put("saved", true);
+        call.resolve(result);
+    }
+
+    @PluginMethod
     public void isRunning(PluginCall call) {
         JSObject result = new JSObject();
         result.put("running", true);

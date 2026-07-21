@@ -8,6 +8,7 @@ import android.app.Service;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
+import android.graphics.Color;
 import android.media.AudioFormat;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
@@ -16,6 +17,8 @@ import android.os.IBinder;
 import android.util.Log;
 
 import androidx.core.app.ActivityCompat;
+import androidx.core.app.NotificationCompat;
+import androidx.core.content.ContextCompat;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.ContextCompat;
@@ -36,7 +39,9 @@ import org.json.JSONObject;
 public class MonitoringService extends Service {
     private static final String TAG = "MonitoringService";
     private static final String CHANNEL_ID = "danger_monitoring";
+    private static final String ALERT_CHANNEL_ID = "danger_alert";
     private static final int NOTIFICATION_ID = 1001;
+    private static final int ALERT_NOTIFICATION_ID = 2001;
     private static final int SAMPLE_RATE = 22050;
     private static final int DURATION_SECONDS = 5;
     private static final String DEFAULT_API_URL = "https://danger-alert-ml.onrender.com";
@@ -100,9 +105,22 @@ public class MonitoringService extends Service {
             );
             channel.setDescription("Shows when danger sound monitoring is active");
             channel.setSound(null, null);
+
+            NotificationChannel alertChannel = new NotificationChannel(
+                    ALERT_CHANNEL_ID,
+                    "Danger Alerts",
+                    NotificationManager.IMPORTANCE_HIGH
+            );
+            alertChannel.setDescription("Critical danger sound alerts");
+            alertChannel.enableVibration(true);
+            alertChannel.setVibrationPattern(new long[]{0, 500, 200, 500});
+            alertChannel.enableLights(true);
+            alertChannel.setLightColor(Color.RED);
+
             NotificationManager manager = getSystemService(NotificationManager.class);
             if (manager != null) {
                 manager.createNotificationChannel(channel);
+                manager.createNotificationChannel(alertChannel);
             }
         }
     }
@@ -304,12 +322,41 @@ public class MonitoringService extends Service {
                 updateNotification("ALERT: " + prediction.toUpperCase() + " detected! (" +
                         String.format("%.0f", confidence * 100) + "%)");
 
-                Intent launchIntent = getPackageManager().getLaunchIntentForPackage(getPackageName());
-                if (launchIntent != null) {
-                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-                    launchIntent.putExtra("danger_alert", prediction);
-                    launchIntent.putExtra("confidence", confidence);
-                    startActivity(launchIntent);
+                Intent alertIntent = new Intent(this, DangerAlertActivity.class);
+                alertIntent.putExtra("danger_type", prediction);
+                alertIntent.putExtra("confidence", confidence);
+                alertIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+
+                PendingIntent contentPending = PendingIntent.getActivity(
+                        this, 0, alertIntent,
+                        PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE
+                );
+
+                NotificationCompat.Builder alertBuilder = new NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
+                        .setContentTitle("DANGER: " + prediction.toUpperCase() + " detected!")
+                        .setContentText("Are you OK?")
+                        .setSmallIcon(android.R.drawable.ic_dialog_alert)
+                        .setPriority(NotificationCompat.PRIORITY_MAX)
+                        .setCategory(NotificationCompat.CATEGORY_ALARM)
+                        .setFullScreenIntent(contentPending, true)
+                        .setContentIntent(contentPending)
+                        .setAutoCancel(true)
+                        .setVibrate(new long[]{0, 500, 200, 500})
+                        .setLights(Color.RED, 500, 500);
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    alertBuilder.setDefaults(Notification.DEFAULT_VIBRATE | Notification.DEFAULT_SOUND);
+                }
+
+                NotificationManager manager = getSystemService(NotificationManager.class);
+                if (manager != null) {
+                    manager.notify(ALERT_NOTIFICATION_ID, alertBuilder.build());
+                }
+
+                try {
+                    startActivity(alertIntent);
+                } catch (Exception e) {
+                    Log.w(TAG, "Cannot start activity from background", e);
                 }
             }
         } catch (Exception e) {
