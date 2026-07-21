@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useMicrophoneContext } from "@/app/lib/MicrophoneProvider"
 
 type StatusCardProps = {
@@ -11,22 +11,44 @@ type StatusCardProps = {
 export default function StatusCard({ isMonitoring = false, error = null }: StatusCardProps) {
   const { isRecording } = useMicrophoneContext()
   const [apiStatus, setApiStatus] = useState("checking")
+  const retryRef = useRef(0)
+  const MAX_RETRIES = 10
 
   const apiBaseUrl =
     process.env.NEXT_PUBLIC_DANGER_API_URL || 'https://danger-alert-ml.onrender.com';
 
   useEffect(() => {
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout>
+
     const checkHealth = async () => {
       try {
-        const res = await fetch(`${apiBaseUrl}/health`)
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 15000)
+        const res = await fetch(`${apiBaseUrl}/health`, { signal: controller.signal })
+        clearTimeout(timeout)
         const data = await res.json()
-        setApiStatus(data.status === "healthy" ? "healthy" : "unhealthy")
+        if (!cancelled) {
+          setApiStatus(data.status === "healthy" ? "healthy" : "unhealthy")
+        }
       } catch (err) {
         console.error("API health check failed:", err)
-        setApiStatus("unhealthy")
+        if (!cancelled && retryRef.current < MAX_RETRIES) {
+          retryRef.current += 1
+          const delay = Math.min(3000 * retryRef.current, 15000)
+          timer = setTimeout(checkHealth, delay)
+        } else if (!cancelled) {
+          setApiStatus("unhealthy")
+        }
       }
     }
+
     checkHealth()
+
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
   }, [apiBaseUrl])
 
   const microphoneActive = isMonitoring || isRecording
