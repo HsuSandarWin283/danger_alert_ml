@@ -161,6 +161,8 @@ export function useDangerSoundMonitor(
   const lastAlertRef = useRef<{ label: string; timestamp: number } | null>(null);
   const mountedRef = useRef(false);
   const closingAudioContextsRef = useRef<WeakSet<AudioContext>>(new WeakSet());
+  const startTimeRef = useRef<number>(0);
+  const WARMUP_MS = 5000;
 
   const stopMonitoring = useCallback(() => {
     if (intervalRef.current !== null) {
@@ -294,9 +296,14 @@ export function useDangerSoundMonitor(
       };
 
       const processChunk = () => {
+        if (Date.now() - startTimeRef.current < WARMUP_MS) {
+          pendingSamplesRef.current = [];
+          return;
+        }
+
         const targetSamples = audioContext.sampleRate * 5;
 
-        if (pendingSamplesRef.current.length < audioContext.sampleRate * 1) {
+        if (pendingSamplesRef.current.length < audioContext.sampleRate * 5) {
           return;
         }
 
@@ -391,6 +398,7 @@ export function useDangerSoundMonitor(
       };
 
       intervalRef.current = window.setInterval(processChunk, 1000);
+      startTimeRef.current = Date.now();
       setIsRecording(true);
       setIsMonitoring(true);
     } catch (err) {
