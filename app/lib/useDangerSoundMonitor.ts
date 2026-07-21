@@ -63,6 +63,18 @@ function calculateRms(samples: Float32Array | number[]) {
   return Math.sqrt(sum / samples.length);
 }
 
+const TARGET_RMS = 0.05;
+
+function normalizeSamples(samples: number[]): number[] {
+  const rms = calculateRms(samples);
+  if (rms < 0.0001 || rms === 0) return samples;
+
+  const gain = TARGET_RMS / rms;
+  const clampedGain = Math.min(gain, 10.0);
+
+  return samples.map((s) => Math.max(-1, Math.min(1, s * clampedGain)));
+}
+
 function samplesToWavBlob(samples: number[], sampleRate: number) {
   const numberOfChannels = 1;
   const bytesPerSample = 2;
@@ -229,9 +241,9 @@ export function useDangerSoundMonitor(
     try {
       const stream = await window.navigator.mediaDevices.getUserMedia({
         audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
         },
       });
 
@@ -309,8 +321,11 @@ export function useDangerSoundMonitor(
         const sendPrediction = async () => {
           try {
             const formData = new FormData();
-            const wavBlob = samplesToWavBlob(samples, audioContext.sampleRate);
+            const normalized = normalizeSamples(samples);
+            const wavBlob = samplesToWavBlob(normalized, audioContext.sampleRate);
             console.log('sampleRate', audioContext.sampleRate);
+            console.log('original rms', rms.toFixed(4));
+            console.log('normalized rms', calculateRms(normalized).toFixed(4));
             console.log('wav size', wavBlob.size);
             console.log('wav type', wavBlob.type);
             formData.append('file', wavBlob, `monitoring-${Date.now()}.wav`);

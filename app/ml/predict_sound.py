@@ -128,6 +128,10 @@ def _compute_mel_spectrogram(audio_path: str) -> tuple[np.ndarray, dict]:
     else:
         signal = signal[:TARGET_LENGTH]
 
+    peak = np.max(np.abs(signal))
+    if peak > 0:
+        signal = signal / peak * 0.95
+
     mel = librosa.feature.melspectrogram(
         y=signal,
         sr=CNN_SAMPLE_RATE,
@@ -136,6 +140,8 @@ def _compute_mel_spectrogram(audio_path: str) -> tuple[np.ndarray, dict]:
         hop_length=CNN_HOP_LENGTH,
     )
     mel_db = librosa.power_to_db(mel, ref=np.max)
+
+    mel_db = np.clip(mel_db, -80.0, 0.0)
 
     from scipy.ndimage import zoom
     zoom_h = CNN_IMG_HEIGHT / mel_db.shape[0]
