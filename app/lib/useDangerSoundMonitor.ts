@@ -1,6 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import BackgroundMonitor from './background-monitor';
+import { Capacitor } from '@capacitor/core';
 
 type PredictionResponse = {
   prediction: string;
@@ -163,6 +165,7 @@ export function useDangerSoundMonitor(
   const closingAudioContextsRef = useRef<WeakSet<AudioContext>>(new WeakSet());
   const startTimeRef = useRef<number>(0);
   const WARMUP_MS = 5000;
+  const MONITORING_KEY = 'danger_monitoring_active';
 
   const stopMonitoring = useCallback(() => {
     if (intervalRef.current !== null) {
@@ -211,16 +214,40 @@ export function useDangerSoundMonitor(
     isPredictingRef.current = false;
     setIsRecording(false);
     setIsMonitoring(false);
+    localStorage.removeItem(MONITORING_KEY);
   }, []);
 
   useEffect(() => {
     mountedRef.current = true;
+
+    const wasMonitoring = localStorage.getItem(MONITORING_KEY) === 'true';
+    if (wasMonitoring) {
+      setTimeout(() => {
+        startMonitoring();
+      }, 1000);
+    }
 
     return () => {
       mountedRef.current = false;
       stopMonitoring();
     };
   }, [stopMonitoring]);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    if (!isMonitoring) return;
+
+    const startBg = async () => {
+      try {
+        await BackgroundMonitor.startMonitoring({ apiUrl: getPredictUrl().replace('/predict', '') });
+      } catch (e) { console.error('Background service failed:', e); }
+    };
+    startBg();
+
+    return () => {
+      BackgroundMonitor.stopMonitoring().catch(() => {});
+    };
+  }, [isMonitoring]);
 
   const startMonitoring = useCallback(async () => {
     setError(null);
@@ -401,6 +428,7 @@ export function useDangerSoundMonitor(
       startTimeRef.current = Date.now();
       setIsRecording(true);
       setIsMonitoring(true);
+      localStorage.setItem(MONITORING_KEY, 'true');
     } catch (err) {
       stopMonitoring();
       const message = err instanceof Error ? err.message : 'Failed to start microphone monitoring';
