@@ -41,10 +41,10 @@ const DEFAULT_PREDICT_URL = 'https://danger-alert-ml.onrender.com/predict';
 const CHUNK_MS = 5000;
 const RMS_CHECK_MS = 200;
 const SCRIPT_PROCESSOR_BUFFER_SIZE = 4096;
-const RMS_THRESHOLD = 0.015;
-const CONFIDENCE_THRESHOLD = 0.8;
+const RMS_THRESHOLD = 0.003;
+const CONFIDENCE_THRESHOLD = 0.6;
 const DUPLICATE_ALERT_MS = 10000;
-const DANGER_LABELS = new Set(['gunshot', 'scream', 'glass_break']);
+const DANGER_LABELS = new Set(['accident', 'gunshot', 'scream', 'glass_break']);
 
 function getPredictUrl() {
   return process.env.NEXT_PUBLIC_DANGER_PREDICT_URL || DEFAULT_PREDICT_URL;
@@ -293,7 +293,7 @@ export function useDangerSoundMonitor(
         }
 
         const count = Math.min(pendingSamplesRef.current.length, targetSamples);
-        const samples = pendingSamplesRef.current.splice(0, count);
+        const samples = pendingSamplesRef.current.slice(0, count);
         const rms = calculateRms(samples);
 
         currentRmsRef.current = rms;
@@ -303,6 +303,7 @@ export function useDangerSoundMonitor(
           return;
         }
 
+        pendingSamplesRef.current.splice(0, count);
         isPredictingRef.current = true;
 
         const sendPrediction = async () => {
