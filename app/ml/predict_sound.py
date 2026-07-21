@@ -282,7 +282,10 @@ def _predict_pytorch(audio_path: str, debug: bool = False) -> tuple[np.ndarray, 
 
 
 def _predict_legacy(audio_path: str) -> np.ndarray:
-    from .features import extract_features
+    try:
+        from .features import extract_features
+    except ImportError:
+        from features import extract_features
 
     features = extract_features(audio_path)
     X = np.array([features])
@@ -337,7 +340,10 @@ def predict_with_debug(audio_path: str) -> dict[str, Any]:
         probabilities, debug_info = _predict_pytorch(audio_path, debug=True)
         feature_shape = debug_info.get("mel_resized_shape", [CNN_IMG_HEIGHT, CNN_IMG_WIDTH])
     elif _model_type == "legacy":
-        from .features import extract_features, EXPECTED_FEATURE_DIM
+        try:
+            from .features import extract_features, EXPECTED_FEATURE_DIM
+        except ImportError:
+            from features import extract_features, EXPECTED_FEATURE_DIM
 
         features = extract_features(audio_path)
         feature_shape = list(features.shape)

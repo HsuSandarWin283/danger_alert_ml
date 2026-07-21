@@ -1,3 +1,4 @@
+import gc
 import logging
 import os
 import sys
@@ -32,16 +33,19 @@ app.add_middleware(
 )
 
 DEBUG_AUDIO_DIR = Path(__file__).resolve().parent / "app" / "ml" / "debug_audio"
+_model_loaded = False
 
 
 @app.on_event("startup")
 async def startup_load_model():
+    global _model_loaded
     DEBUG_AUDIO_DIR.mkdir(parents=True, exist_ok=True)
     try:
         load_model()
+        _model_loaded = True
         logger.info("Model loaded successfully at startup")
     except Exception as exc:
-        logger.exception("Failed to load model at startup")
+        logger.exception("Failed to load model at startup — /predict will return 503")
 
 
 def _save_upload(file: UploadFile) -> str:
@@ -77,6 +81,8 @@ def _save_debug_audio(src_path: str, filename: str) -> str | None:
 
 @app.post("/predict")
 async def predict_sound(file: UploadFile = File(...)):
+    if not _model_loaded:
+        raise HTTPException(status_code=503, detail="Model not loaded yet. Try again later.")
     tmp_path = None
 
     try:
@@ -102,10 +108,13 @@ async def predict_sound(file: UploadFile = File(...)):
     finally:
         if tmp_path and os.path.exists(tmp_path):
             os.unlink(tmp_path)
+        gc.collect()
 
 
 @app.post("/debug-predict")
 async def debug_predict(file: UploadFile = File(...)):
+    if not _model_loaded:
+        raise HTTPException(status_code=503, detail="Model not loaded yet. Try again later.")
     tmp_path = None
 
     try:
@@ -146,11 +155,17 @@ async def debug_predict(file: UploadFile = File(...)):
     finally:
         if tmp_path and os.path.exists(tmp_path):
             os.unlink(tmp_path)
+        gc.collect()
 
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy"}
+    if not _model_loaded:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "degraded", "model_loaded": False, "detail": "Model not loaded yet"},
+        )
+    return {"status": "healthy", "model_loaded": True}
 
 
 if __name__ == "__main__":
