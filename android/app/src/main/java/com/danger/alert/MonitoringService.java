@@ -319,8 +319,7 @@ public class MonitoringService extends Service {
             double confidence = obj.optDouble("confidence", 0);
 
             if (!prediction.equals("normal") && confidence >= 0.6) {
-                updateNotification("ALERT: " + prediction.toUpperCase() + " detected! (" +
-                        String.format("%.0f", confidence * 100) + "%)");
+                Log.i(TAG, "Danger detected: " + prediction + " (" + confidence + ")");
 
                 Intent alertIntent = new Intent(this, DangerAlertActivity.class);
                 alertIntent.putExtra("danger_type", prediction);
