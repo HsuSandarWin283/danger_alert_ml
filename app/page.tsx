@@ -60,7 +60,7 @@ export default function Home() {
       <Navbar userEmail={user.email} onLogout={handleLogout} />
       <HeroSection />
       <div className="max-w-6xl mx-auto px-6 py-10 grid md:grid-cols-2 gap-6">
-        <StatusCard isMonitoring={isMonitoring} error={error} />
+        <StatusCard error={error} />
         <DangerAlert
           detectedAnswer={lastDanger?.detectedAnswer}
           confidence={lastDanger?.confidence}

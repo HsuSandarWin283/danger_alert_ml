@@ -168,6 +168,10 @@ export function useDangerSoundMonitor(
   const MONITORING_KEY = 'danger_monitoring_active';
 
   const stopMonitoring = useCallback(() => {
+    setIsRecording(false);
+    setIsMonitoring(false);
+    localStorage.removeItem(MONITORING_KEY);
+
     if (intervalRef.current !== null) {
       window.clearInterval(intervalRef.current);
       intervalRef.current = null;
@@ -184,7 +188,6 @@ export function useDangerSoundMonitor(
       analyserRef.current?.disconnect();
       silentGainRef.current?.disconnect();
     } catch {
-      // Ignore disconnect errors during cleanup.
     }
 
     processorRef.current = null;
@@ -212,9 +215,6 @@ export function useDangerSoundMonitor(
 
     pendingSamplesRef.current = [];
     isPredictingRef.current = false;
-    setIsRecording(false);
-    setIsMonitoring(false);
-    localStorage.removeItem(MONITORING_KEY);
   }, []);
 
   useEffect(() => {

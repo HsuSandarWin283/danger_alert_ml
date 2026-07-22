@@ -4,11 +4,10 @@ import { useEffect, useRef, useState } from "react"
 import { useMicrophoneContext } from "@/app/lib/MicrophoneProvider"
 
 type StatusCardProps = {
-  isMonitoring?: boolean
   error?: string | null
 }
 
-export default function StatusCard({ isMonitoring = false, error = null }: StatusCardProps) {
+export default function StatusCard({ error = null }: StatusCardProps) {
   const { isRecording } = useMicrophoneContext()
   const [apiStatus, setApiStatus] = useState("checking")
   const retryRef = useRef(0)
@@ -51,7 +50,7 @@ export default function StatusCard({ isMonitoring = false, error = null }: Statu
     }
   }, [apiBaseUrl])
 
-  const microphoneActive = isMonitoring || isRecording
+  const microphoneActive = isRecording
 
   return (
     <div className="bg-white rounded-3xl shadow-lg p-8">
