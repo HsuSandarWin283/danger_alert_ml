@@ -47,3 +47,7 @@ __pycache__/
 
 # Dataset
 *.zip
+
+# Secrets
+service-account.json
+android/app/src/main/assets/service-account.json
