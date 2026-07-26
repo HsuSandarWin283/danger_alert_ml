@@ -8,9 +8,17 @@ import android.graphics.Color;
 import android.location.Address;
 import android.location.Geocoder;
 import android.location.Location;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.CountDownTimer;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.PowerManager;
+import android.telephony.SmsManager;
+import android.util.Log;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
 import android.view.Gravity;
 import android.view.View;
 import android.view.WindowManager;
@@ -39,7 +47,9 @@ import java.util.concurrent.Executors;
 
 public class DangerAlertActivity extends AppCompatActivity {
 
+    private static final String TAG = "DangerAlertActivity";
     private static final int LOCATION_PERMISSION_REQUEST = 200;
+    private static final int SMS_PERMISSION_REQUEST = 201;
     private CountDownTimer timer;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private String dangerType = "unknown";
@@ -171,29 +181,36 @@ public class DangerAlertActivity extends AppCompatActivity {
 
     private void onSendHelp() {
         if (timer != null) timer.cancel();
-
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-                != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this,
-                    new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
-                    LOCATION_PERMISSION_REQUEST);
-            return;
-        }
+        showResult("Sending help request...");
         sendHelpWithLocation();
     }
 
     private void sendHelpWithLocation() {
+        final boolean[] done = {false};
+
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            if (!done[0]) {
+                done[0] = true;
+                doSendHelp(0, 0, "Location unavailable (timeout)");
+            }
+        }, 5000);
+
         FusedLocationProviderClient client = LocationServices.getFusedLocationProviderClient(this);
 
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED &&
+            ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
                 != PackageManager.PERMISSION_GRANTED) {
-            doSendHelp(0, 0, "Location unavailable");
+            done[0] = true;
+            doSendHelp(0, 0, "Location unavailable (no permission)");
             return;
         }
 
         client.getLastLocation().addOnSuccessListener(this, new com.google.android.gms.tasks.OnSuccessListener<Location>() {
             @Override
             public void onSuccess(Location location) {
+                if (done[0]) return;
+                done[0] = true;
                 if (location != null) {
                     double lat = location.getLatitude();
                     double lng = location.getLongitude();
@@ -235,18 +252,28 @@ public class DangerAlertActivity extends AppCompatActivity {
                     String projectId = getFirebaseProjectId();
                     String currentUserId = getCurrentUserId();
 
-                    if (apiKey == null || projectId == null || currentUserId == null) {
-                        showResult("Failed: not configured");
+                    if (apiKey == null || projectId == null || currentUserId == null || currentUserId.isEmpty()) {
+                        showResult("Failed: Firebase not configured.\nuserId=" + currentUserId);
                         return;
                     }
 
-                    String userDoc = httpGet("https://firestore.googleapis.com/v1/projects/"
-                            + projectId + "/databases/(default)/documents/users/"
-                            + currentUserId + "?key=" + apiKey);
                     String userName = "Unknown User";
-                    if (userDoc != null && userDoc.contains("\"name\"")) {
-                        String n = userDoc.replaceAll(".*\"name\"\\s*:\\s*\"([^\"]+)\".*", "$1");
-                        if (!n.equals(userDoc)) userName = n;
+                    try {
+                        String accessToken = FcmHelper.getAccessToken(DangerAlertActivity.this);
+                        if (currentUserId != null && !currentUserId.isEmpty()) {
+                            String senderDoc = httpGetWithAuth("https://firestore.googleapis.com/v1/projects/"
+                                    + projectId + "/databases/(default)/documents/users/" + currentUserId, accessToken);
+                            if (senderDoc != null && senderDoc.contains("stringValue")) {
+                                JSONObject senderObj = new JSONObject(senderDoc);
+                                JSONObject senderFields = senderObj.optJSONObject("fields");
+                                if (senderFields != null) {
+                                    JSONObject nameObj = senderFields.optJSONObject("name");
+                                    if (nameObj != null) userName = nameObj.optString("stringValue", "Unknown User");
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        Log.w(TAG, "Failed to get user name: " + e.getMessage());
                     }
 
                     String alertMsg = userName + " needs help!\n"
@@ -256,40 +283,85 @@ public class DangerAlertActivity extends AppCompatActivity {
                         alertMsg += String.format(Locale.getDefault(), " (%.4f, %.4f)", lat, lng);
                     }
 
-                    String membersUrl = "https://firestore.googleapis.com/v1/projects/"
-                            + projectId + "/databases/(default)/documents/group_members?key=" + apiKey
-                            + "&structuredQuery.where.fieldFilter.field.fieldPath=groupId"
-                            + "&structuredQuery.where.fieldFilter.value.stringValue=" + currentUserId
-                            + "&structuredQuery.where.fieldFilter.op=EQUAL";
-                    String membersJson = httpGet(membersUrl);
+                    String membersJson = getSharedPreferences("capacitor", MODE_PRIVATE)
+                            .getString("trusted_members", "[]");
+                    String pendingFcm = getSharedPreferences("capacitor", MODE_PRIVATE)
+                            .getString("pending_fcm_token", "");
+                    String savedFcm = getSharedPreferences("capacitor", MODE_PRIVATE)
+                            .getString("fcm_token", "");
+                    String fcmError = getSharedPreferences("capacitor", MODE_PRIVATE)
+                            .getString("fcm_error", "");
+                    Log.i(TAG, "Trusted members raw: " + membersJson);
 
-                    int sent = 0;
-                    if (membersJson != null && membersJson.contains("documents")) {
-                        String[] docs = membersJson.split("\"userId\"\\s*:\\s*\"");
-                        for (int i = 1; i < docs.length; i++) {
-                            String uid = docs[i].replaceAll("[\"\\s,}].*", "").trim();
-                            if (uid.isEmpty() || uid.equals(currentUserId)) continue;
-                            String body = "{\"fields\":{"
-                                    + "\"alertMessage\":{\"stringValue\":\"" + escapeJson(alertMsg) + "\"},"
-                                    + "\"senderId\":{\"stringValue\":\"" + currentUserId + "\"},"
-                                    + "\"senderName\":{\"stringValue\":\"" + escapeJson(userName) + "\"},"
-                                    + "\"locationName\":{\"stringValue\":\"" + escapeJson(locationName) + "\"},"
-                                    + "\"latitude\":{\"doubleValue\":" + lat + "},"
-                                    + "\"longitude\":{\"doubleValue\":" + lng + "},"
-                                    + "\"dangerType\":{\"stringValue\":\"" + dangerType + "\"},"
-                                    + "\"timestamp\":{\"timestampValue\":\"" + java.time.Instant.now() + "\"},"
-                                    + "\"read\":{\"booleanValue\":false}}}";
-                            httpPost("https://firestore.googleapis.com/v1/projects/"
-                                    + projectId + "/databases/(default)/documents/alerts/"
-                                    + uid + "/notifications?key=" + apiKey, body);
-                            sent++;
+                    int fcmSent = 0;
+                    int parsedCount = 0;
+                    int emptyTokens = 0;
+                    String firstMemberDoc = "";
+                    try {
+                        String accessToken = FcmHelper.getAccessToken(DangerAlertActivity.this);
+                        Log.i(TAG, "Access token obtained OK");
+
+                        JSONArray membersArr = new JSONArray(membersJson);
+                        parsedCount = membersArr.length();
+
+                        for (int i = 0; i < membersArr.length(); i++) {
+                            JSONObject member = membersArr.getJSONObject(i);
+                            String memberUid = member.optString("uid", "");
+                            if (memberUid.isEmpty()) continue;
+
+                            String memberDoc = httpGetWithAuth("https://firestore.googleapis.com/v1/projects/"
+                                    + projectId + "/databases/(default)/documents/users/" + memberUid,
+                                    accessToken);
+                            String fcmToken = null;
+                            String memberName = "member";
+                            Log.i(TAG, "Member doc response length: " + (memberDoc != null ? memberDoc.length() : 0));
+                            if (memberDoc != null && memberDoc.contains("stringValue")) {
+                                JSONObject docObj = new JSONObject(memberDoc);
+                                JSONObject fields = docObj.optJSONObject("fields");
+                                if (fields != null) {
+                                    JSONObject fcmObj = fields.optJSONObject("fcmToken");
+                                    if (fcmObj != null) fcmToken = fcmObj.optString("stringValue", "");
+                                    JSONObject nameObj = fields.optJSONObject("name");
+                                    if (nameObj != null) memberName = nameObj.optString("stringValue", "member");
+                                }
+                            }
+
+                            Log.i(TAG, "Member " + i + ": " + memberName + " fcmToken=" + (fcmToken != null ? "FOUND" : "EMPTY"));
+
+                            if (i == 0) {
+                                firstMemberDoc = memberDoc == null ? "NULL" :
+                                        memberDoc.substring(0, Math.min(200, memberDoc.length()));
+                            }
+                            if (fcmToken == null || fcmToken.isEmpty()) { emptyTokens++; continue; }
+                            try {
+                                FcmHelper.sendPush(accessToken, fcmToken,
+                                        "DANGER: " + dangerType.toUpperCase(), alertMsg);
+                                fcmSent++;
+                            } catch (Exception fcmErr) {
+                                Log.e(TAG, "FCM push failed", fcmErr);
+                            }
                         }
+                    } catch (Exception e) {
+                        Log.e(TAG, "Failed", e);
                     }
 
-                    if (sent > 0) {
-                        showResult("Help sent to " + sent + " member" + (sent > 1 ? "s" : "") + "!\n\n" + alertMsg);
+                    String debugInfo = "\n[Debug] Members: " + parsedCount
+                            + " | Empty tokens: " + emptyTokens
+                            + " | FCM sent: " + fcmSent
+                            + "\nYour saved token: " + (savedFcm.isEmpty() ? "NONE" : savedFcm.substring(0, Math.min(20, savedFcm.length())) + "...")
+                            + (fcmError.isEmpty() ? "" : "\nFCM Error: " + fcmError);
+
+                    if (parsedCount > 0 && fcmSent == 0) {
+                        debugInfo += "\nMember0 doc: " + firstMemberDoc;
+                    }
+
+                    if (fcmSent > 0) {
+                        // showResult("Push notification sent to " + fcmSent + " member!" + debugInfo + "\n\n" + alertMsg);
+                        showResult("Push notification sent to " + fcmSent + " member!");
+                    } else if (emptyTokens > 0) {
+                        showResult("Found " + parsedCount + " member(s) but they don't have FCM tokens yet.\nMember needs to open the app and start monitoring first." + debugInfo);
                     } else {
-                        showResult("No trusted group members found.\nAdd members in Trusted Group settings.");
+                        showResult("No trusted group members found.\nAdd members in Trusted Group settings." + debugInfo);
                     }
 
                 } catch (Exception e) {
@@ -297,6 +369,148 @@ public class DangerAlertActivity extends AppCompatActivity {
                 }
             }
         });
+    }
+
+    private String getFirebaseServerKey() {
+        return getSharedPreferences("capacitor", MODE_PRIVATE).getString("fcm_server_key", null);
+    }
+
+    private String getFirebaseClientEmail() {
+        return getSharedPreferences("capacitor", MODE_PRIVATE).getString("fcm_client_email", null);
+    }
+
+    private String getFirebasePrivateKey() {
+        return getSharedPreferences("capacitor", MODE_PRIVATE).getString("fcm_private_key", null);
+    }
+
+    private String getFcmAccessToken() throws Exception {
+        String clientEmail = getFirebaseClientEmail();
+        String privateKeyPem = getFirebasePrivateKey();
+        if (clientEmail == null || privateKeyPem == null || clientEmail.isEmpty() || privateKeyPem.isEmpty()) {
+            throw new Exception("Service account not configured");
+        }
+
+        long now = System.currentTimeMillis() / 1000;
+        String header = base64Url("{\"alg\":\"RS256\",\"typ\":\"JWT\"}".getBytes());
+        String payload = base64Url(("{\"iss\":\"" + clientEmail + "\","
+                + "\"scope\":\"https://www.googleapis.com/auth/cloud-platform\","
+                + "\"aud\":\"https://oauth2.googleapis.com/token\","
+                + "\"iat\":" + now + ","
+                + "\"exp\":" + (now + 3600) + "}").getBytes());
+        String signingInput = header + "." + payload;
+
+        String cleanKey = privateKeyPem
+                .replace("\\n", "\n")
+                .replace("-----BEGIN PRIVATE KEY-----", "")
+                .replace("-----END PRIVATE KEY-----", "")
+                .replaceAll("\\s+", "");
+
+        java.security.spec.PKCS8EncodedKeySpec keySpec = new java.security.spec.PKCS8EncodedKeySpec(
+                android.util.Base64.decode(cleanKey, android.util.Base64.DEFAULT));
+        java.security.KeyFactory kf = java.security.KeyFactory.getInstance("RSA");
+        java.security.PrivateKey privateKey = kf.generatePrivate(keySpec);
+
+        java.security.Signature sig = java.security.Signature.getInstance("SHA256withRSA");
+        sig.initSign(privateKey);
+        sig.update(signingInput.getBytes());
+        String signature = base64Url(sig.sign());
+
+        String jwt = signingInput + "." + signature;
+
+        String tokenBody = "grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=" + jwt;
+        java.net.HttpURLConnection c = (java.net.HttpURLConnection) new java.net.URL("https://oauth2.googleapis.com/token").openConnection();
+        c.setRequestMethod("POST");
+        c.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+        c.setDoOutput(true);
+        java.io.OutputStream os = c.getOutputStream();
+        os.write(tokenBody.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        os.close();
+
+        int code = c.getResponseCode();
+        if (code == 200) {
+            java.io.BufferedReader r = new java.io.BufferedReader(new java.io.InputStreamReader(c.getInputStream()));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = r.readLine()) != null) sb.append(line);
+            r.close();
+            String response = sb.toString();
+            String token = response.replaceAll(".*\"access_token\"\\s*:\\s*\"([^\"]+)\".*", "$1");
+            if (!token.equals(response)) return token;
+        }
+        throw new Exception("Failed to get access token: " + code);
+    }
+
+    private String extractFirestoreString(String json, String field) {
+        String pattern = "\"" + field + "\":{\"stringValue\":\"";
+        int idx = json.indexOf(pattern);
+        if (idx < 0) return null;
+        int valStart = idx + pattern.length();
+        int valEnd = valStart;
+        while (valEnd < json.length() && json.charAt(valEnd) != '"') {
+            if (json.charAt(valEnd) == '\\') valEnd++;
+            valEnd++;
+        }
+        return json.substring(valStart, valEnd);
+    }
+
+    private String base64Url(byte[] data) {
+        return android.util.Base64.encodeToString(data, android.util.Base64.URL_SAFE | android.util.Base64.NO_WRAP | android.util.Base64.NO_PADDING);
+    }
+
+    private void sendFcmPush(String fcmToken, String title, String body) throws Exception {
+        String projectId = getFirebaseProjectId();
+        String accessToken = getFcmAccessToken();
+
+        String jsonBody = "{"
+                + "\"message\":{"
+                + "\"token\":\"" + fcmToken + "\","
+                + "\"notification\":{"
+                + "\"title\":\"" + escapeJson(title) + "\","
+                + "\"body\":\"" + escapeJson(body) + "\""
+                + "},"
+                + "\"android\":{"
+                + "\"priority\":\"high\","
+                + "\"notification\":{\"channel_id\":\"danger_alert\"}"
+                + "}"
+                + "}"
+                + "}";
+
+        java.net.URL url = new java.net.URL("https://fcm.googleapis.com/v1/projects/" + projectId + "/messages:send");
+        java.net.HttpURLConnection c = (java.net.HttpURLConnection) url.openConnection();
+        c.setRequestMethod("POST");
+        c.setRequestProperty("Content-Type", "application/json");
+        c.setRequestProperty("Authorization", "Bearer " + accessToken);
+        c.setDoOutput(true);
+        java.io.OutputStream os = c.getOutputStream();
+        os.write(jsonBody.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        os.close();
+        int code = c.getResponseCode();
+        Log.i(TAG, "FCM v1 response: " + code);
+    }
+
+    private String httpPostWithAuth(String urlStr, String body, String bearerToken) throws Exception {
+        HttpURLConnection c = (HttpURLConnection) new URL(urlStr).openConnection();
+        c.setRequestMethod("POST");
+        c.setRequestProperty("Content-Type", "application/json");
+        if (bearerToken != null && !bearerToken.isEmpty()) {
+            c.setRequestProperty("Authorization", "Bearer " + bearerToken);
+        }
+        c.setDoOutput(true);
+        OutputStream os = c.getOutputStream();
+        os.write(body.getBytes(StandardCharsets.UTF_8));
+        os.close();
+        int code = c.getResponseCode();
+        if (code >= 200 && code < 300) {
+            BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream()));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = r.readLine()) != null) sb.append(line);
+            r.close();
+            return sb.toString();
+        } else {
+            Log.w(TAG, "HTTP " + code + " for " + urlStr);
+        }
+        return null;
     }
 
     private void showResult(final String message) {
@@ -347,9 +561,22 @@ public class DangerAlertActivity extends AppCompatActivity {
         return getSharedPreferences("capacitor", MODE_PRIVATE).getString("current_user_id", null);
     }
 
+    private String getFirebaseAuthToken() {
+        return getSharedPreferences("capacitor", MODE_PRIVATE).getString("firebase_auth_token", null);
+    }
+
     private String httpGet(String urlStr) throws Exception {
+        return httpGetWithAuth(urlStr, null);
+    }
+
+    private String httpGetWithAuth(String urlStr, String bearerToken) throws Exception {
         HttpURLConnection c = (HttpURLConnection) new URL(urlStr).openConnection();
         c.setRequestMethod("GET");
+        c.setConnectTimeout(10000);
+        c.setReadTimeout(10000);
+        if (bearerToken != null && !bearerToken.isEmpty()) {
+            c.setRequestProperty("Authorization", "Bearer " + bearerToken);
+        }
         if (c.getResponseCode() == 200) {
             BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream()));
             StringBuilder sb = new StringBuilder();
@@ -361,15 +588,28 @@ public class DangerAlertActivity extends AppCompatActivity {
         return null;
     }
 
-    private void httpPost(String urlStr, String body) throws Exception {
+    private String httpPost(String urlStr, String body) throws Exception {
         HttpURLConnection c = (HttpURLConnection) new URL(urlStr).openConnection();
         c.setRequestMethod("POST");
         c.setRequestProperty("Content-Type", "application/json");
+        String token = getFirebaseAuthToken();
+        if (token != null && !token.isEmpty()) {
+            c.setRequestProperty("Authorization", "Bearer " + token);
+        }
         c.setDoOutput(true);
         OutputStream os = c.getOutputStream();
         os.write(body.getBytes(StandardCharsets.UTF_8));
         os.close();
-        c.getResponseCode();
+        int code = c.getResponseCode();
+        if (code >= 200 && code < 300) {
+            BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream()));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = r.readLine()) != null) sb.append(line);
+            r.close();
+            return sb.toString();
+        }
+        return null;
     }
 
     private String escapeJson(String s) {

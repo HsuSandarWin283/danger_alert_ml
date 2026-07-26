@@ -31,18 +31,22 @@ export function searchUsers(searchQuery: string, currentUserId: string, callback
     )
 
     const userIds = filtered.map((u) => u.uid)
-    const memberUserIds = new Set<string>()
+    const myMemberIds = new Set<string>()
 
     if (userIds.length > 0) {
       const membersSnapshot = await getDocs(
-        query(collection(db, GROUP_MEMBERS_COLLECTION), where('userId', 'in', userIds))
+        query(
+          collection(db, GROUP_MEMBERS_COLLECTION),
+          where('groupId', '==', currentUserId),
+          where('userId', 'in', userIds)
+        )
       )
-      membersSnapshot.docs.forEach((d) => memberUserIds.add(d.data().userId))
+      membersSnapshot.docs.forEach((d) => myMemberIds.add(d.data().userId))
     }
 
     const results: SearchResult[] = filtered.map((user) => ({
       ...user,
-      isMember: memberUserIds.has(user.uid),
+      isMember: myMemberIds.has(user.uid),
     }))
 
     callback(results)
@@ -64,18 +68,22 @@ export async function searchUsersOnce(searchQuery: string, currentUserId: string
   )
 
   const userIds = filtered.map((u) => u.uid).slice(0, 10)
-  const memberUserIds = new Set<string>()
+  const myMemberIds = new Set<string>()
 
   if (userIds.length > 0) {
     const membersSnapshot = await getDocs(
-      query(collection(db, GROUP_MEMBERS_COLLECTION), where('userId', 'in', userIds))
+      query(
+        collection(db, GROUP_MEMBERS_COLLECTION),
+        where('groupId', '==', currentUserId),
+        where('userId', 'in', userIds)
+      )
     )
-    membersSnapshot.docs.forEach((d) => memberUserIds.add(d.data().userId))
+    membersSnapshot.docs.forEach((d) => myMemberIds.add(d.data().userId))
   }
 
   return filtered.map((user) => ({
     ...user,
-    isMember: memberUserIds.has(user.uid),
+    isMember: myMemberIds.has(user.uid),
   }))
 }
 

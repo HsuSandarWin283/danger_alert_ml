@@ -244,6 +244,35 @@ export function useDangerSoundMonitor(
     };
     startBg();
 
+    const fetchMembers = async () => {
+      try {
+        const { getAuth } = await import('firebase/auth');
+        const { getFirestore, collection, query, where, getDocs, doc, getDoc } = await import('firebase/firestore');
+        const auth = getAuth();
+        const user = auth.currentUser;
+        if (!user) return;
+
+        const db = getFirestore();
+        const q = query(collection(db, 'group_members'), where('groupId', '==', user.uid));
+        const snapshot = await getDocs(q);
+        console.log('Trusted group docs found:', snapshot.size);
+
+        const memberUids: { uid: string }[] = [];
+        for (const d of snapshot.docs) {
+          const data = d.data();
+          const uid = data.userId;
+          if (!uid) continue;
+          memberUids.push({ uid });
+        }
+
+        console.log('Saving', memberUids.length, 'member UIDs for native alert');
+        await BackgroundMonitor.saveTrustedMembers({ members: JSON.stringify(memberUids) });
+      } catch (e) {
+        console.error('Failed to fetch trusted members:', e);
+      }
+    };
+    fetchMembers();
+
     return () => {
       BackgroundMonitor.stopMonitoring().catch(() => {});
     };

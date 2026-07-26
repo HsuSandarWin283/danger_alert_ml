@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import SignupForm from '@/app/ui/signup-form'
 
 export const metadata = {
@@ -22,9 +23,9 @@ export default function SignupPage() {
         </div>
         <p className="text-center text-sm text-gray-600">
           Already have an account?{' '}
-          <a href="/login" className="font-medium text-blue-600 hover:text-blue-500">
+          <Link href="/login" className="font-medium text-blue-600 hover:text-blue-500">
             Log In
-          </a>
+          </Link>
         </p>
       </div>
     </div>
