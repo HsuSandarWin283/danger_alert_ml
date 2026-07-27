@@ -4,8 +4,6 @@ import android.content.Context;
 import android.util.Base64;
 import android.util.Log;
 
-import org.json.JSONObject;
-
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -26,9 +24,11 @@ class FcmHelper {
             throw new Exception("service-account.json not found");
         }
 
-        JSONObject sa = new JSONObject(json);
-        String clientEmail = sa.getString("client_email");
-        String privateKeyPem = sa.getString("private_key");
+        String clientEmail = extractJson(json, "client_email");
+        String privateKeyPem = extractJson(json, "private_key");
+        if (clientEmail == null || privateKeyPem == null) {
+            throw new Exception("Invalid service account JSON");
+        }
 
         long now = System.currentTimeMillis() / 1000;
         String header = base64Url("{\"alg\":\"RS256\",\"typ\":\"JWT\"}".getBytes());
@@ -138,16 +138,7 @@ class FcmHelper {
         os.write(jsonBody.getBytes(StandardCharsets.UTF_8));
         os.close();
         int code = c.getResponseCode();
-        BufferedReader reader = new BufferedReader(new InputStreamReader(code >= 200 && code < 300 ? c.getInputStream() : c.getErrorStream()));
-        StringBuilder sb = new StringBuilder();
-        String line;
-        while ((line = reader.readLine()) != null) sb.append(line);
-        reader.close();
-        String response = sb.toString();
-        Log.i(TAG, "FCM v1 response: " + code + " body: " + response.substring(0, Math.min(200, response.length())));
-        if (code < 200 || code >= 300) {
-            throw new Exception("FCM failed: " + code + " - " + response.substring(0, Math.min(200, response.length())));
-        }
+        Log.i(TAG, "FCM v1 response: " + code);
     }
 
     private static String base64Url(byte[] data) {
