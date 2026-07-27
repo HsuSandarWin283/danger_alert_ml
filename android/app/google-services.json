@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "205954108593",
+    "project_id": "danger-alert-903e5",
+    "storage_bucket": "danger-alert-903e5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:205954108593:android:5798d421eec82e1cf4e690",
+        "android_client_info": {
+          "package_name": "com.danger.alert"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCJy0LYLHK3gJ80mFdwFPQoKhQ_LdYWZD4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -4,11 +4,12 @@ import { User } from './trusted-group-types'
 
 const USERS_COLLECTION = 'users'
 
-export async function createUserProfile(uid: string, name: string, email: string, photoURL?: string): Promise<void> {
+export async function createUserProfile(uid: string, name: string, email: string, phone?: string, photoURL?: string): Promise<void> {
   await setDoc(doc(db, USERS_COLLECTION, uid), {
     uid,
     name,
     email,
+    phone: phone || null,
     photoURL: photoURL || null,
   }, { merge: true })
 }

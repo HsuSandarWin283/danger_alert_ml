@@ -9,6 +9,7 @@ export default function SignupForm() {
   const router = useRouter()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -20,7 +21,7 @@ export default function SignupForm() {
     try {
       const user = await signupWithEmail(email, password)
       if (user) {
-        await createUserProfile(user.uid, name, email)
+        await createUserProfile(user.uid, name, email, phone)
       }
       router.push('/')
       router.refresh()
@@ -65,6 +66,23 @@ export default function SignupForm() {
           className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
           required
           autoComplete="email"
+        />
+      </div>
+
+      <div className="mb-4">
+        <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
+          Phone Number
+        </label>
+        <input
+          id="phone"
+          name="phone"
+          type="tel"
+          placeholder="+959xxxxxxxxx"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+          required
+          autoComplete="tel"
         />
       </div>
 
