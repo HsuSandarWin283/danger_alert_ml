@@ -4,6 +4,8 @@ import android.content.Context;
 import android.util.Base64;
 import android.util.Log;
 
+import org.json.JSONObject;
+
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -24,11 +26,9 @@ class FcmHelper {
             throw new Exception("service-account.json not found");
         }
 
-        String clientEmail = extractJson(json, "client_email");
-        String privateKeyPem = extractJson(json, "private_key");
-        if (clientEmail == null || privateKeyPem == null) {
-            throw new Exception("Invalid service account JSON");
-        }
+        JSONObject sa = new JSONObject(json);
+        String clientEmail = sa.getString("client_email");
+        String privateKeyPem = sa.getString("private_key");
 
         long now = System.currentTimeMillis() / 1000;
         String header = base64Url("{\"alg\":\"RS256\",\"typ\":\"JWT\"}".getBytes());
@@ -95,23 +95,9 @@ class FcmHelper {
         }
     }
 
-    private static String extractJson(String json, String key) {
-        int idx = json.indexOf("\"" + key + "\"");
-        if (idx < 0) return null;
-        int colonIdx = json.indexOf(":", idx);
-        int valStart = json.indexOf("\"", colonIdx + 1);
-        if (valStart < 0) return null;
-        valStart++;
-        int valEnd = valStart;
-        while (valEnd < json.length() && json.charAt(valEnd) != '"') {
-            if (json.charAt(valEnd) == '\\') valEnd++;
-            valEnd++;
-        }
-        return json.substring(valStart, valEnd).replace("\\n", "\n").replace("\\\"", "\"").replace("\\\\", "\\");
-    }
-
     static void sendPush(String accessToken, String fcmToken, String title, String body) throws Exception {
         String projectId = "danger-alert-903e5";
+        fcmToken = fcmToken.trim().replaceAll("\\s+", "");
         String jsonBody = "{"
                 + "\"message\":{"
                 + "\"token\":\"" + fcmToken + "\","
@@ -126,6 +112,9 @@ class FcmHelper {
                 + "}"
                 + "}";
 
+        Log.i(TAG, "FCM send token=" + fcmToken);
+        Log.i(TAG, "FCM send body=" + jsonBody);
+
         URL url = new URL("https://fcm.googleapis.com/v1/projects/" + projectId + "/messages:send");
         HttpURLConnection c = (HttpURLConnection) url.openConnection();
         c.setRequestMethod("POST");
@@ -137,8 +126,18 @@ class FcmHelper {
         OutputStream os = c.getOutputStream();
         os.write(jsonBody.getBytes(StandardCharsets.UTF_8));
         os.close();
+
         int code = c.getResponseCode();
-        Log.i(TAG, "FCM v1 response: " + code);
+        BufferedReader reader = new BufferedReader(new InputStreamReader(code >= 200 && code < 300 ? c.getInputStream() : c.getErrorStream()));
+        StringBuilder sb = new StringBuilder();
+        String line;
+        while ((line = reader.readLine()) != null) sb.append(line);
+        reader.close();
+        String response = sb.toString();
+        Log.i(TAG, "FCM v1 response: " + code + " body: " + response.substring(0, Math.min(200, response.length())));
+        if (code < 200 || code >= 300) {
+            throw new Exception("FCM failed: " + code + " - " + response.substring(0, Math.min(200, response.length())));
+        }
     }
 
     private static String base64Url(byte[] data) {

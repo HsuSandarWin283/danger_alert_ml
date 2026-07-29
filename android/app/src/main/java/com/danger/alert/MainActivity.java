@@ -49,6 +49,10 @@ public class MainActivity extends BridgeActivity {
                 != PackageManager.PERMISSION_GRANTED) {
             perms.add(android.Manifest.permission.ACCESS_COARSE_LOCATION);
         }
+        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
+            perms.add(android.Manifest.permission.RECORD_AUDIO);
+        }
         if (!perms.isEmpty()) {
             ActivityCompat.requestPermissions(this, perms.toArray(new String[0]), 100);
         }

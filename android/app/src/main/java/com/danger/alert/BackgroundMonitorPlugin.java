@@ -65,6 +65,7 @@ public class BackgroundMonitorPlugin extends Plugin {
         String serverKey = call.getString("serverKey", "");
         String clientEmail = call.getString("clientEmail", "");
         String privateKey = call.getString("privateKey", "");
+        String displayName = call.getString("displayName", "");
 
         SharedPreferences.Editor editor = getContext().getSharedPreferences("capacitor", android.content.Context.MODE_PRIVATE).edit();
         editor.putString("firebase_api_key", apiKey);
@@ -76,6 +77,7 @@ public class BackgroundMonitorPlugin extends Plugin {
         editor.putString("fcm_server_key", serverKey);
         editor.putString("fcm_client_email", clientEmail);
         editor.putString("fcm_private_key", privateKey);
+        editor.putString("user_display_name", displayName);
         editor.apply();
 
         if (!userId.isEmpty()) {

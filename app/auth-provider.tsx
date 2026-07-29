@@ -24,24 +24,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (firebaseUser && Capacitor.isNativePlatform()) {
         firebaseUser.getIdToken().then((token) => {
           import('@/app/lib/background-monitor').then(({ default: BackgroundMonitor }) => {
-            BackgroundMonitor.saveFirebaseConfig({
-              apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || '',
-              projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || '',
-              userId: firebaseUser.uid,
-              authToken: token,
-              phone: '',
-              fcmToken: '',
-              serverKey: '',
-              clientEmail: '',
-              privateKey: '',
+            import('@/app/lib/user-profile').then(({ getUserProfile }) => {
+              getUserProfile(firebaseUser.uid).then((profile) => {
+                BackgroundMonitor.saveFirebaseConfig({
+                  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || '',
+                  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || '',
+                  userId: firebaseUser.uid,
+                  authToken: token,
+                  phone: profile?.phone || '',
+                  fcmToken: '',
+                  serverKey: '',
+                  clientEmail: '',
+                  privateKey: '',
+                  displayName: profile?.name || firebaseUser.displayName || '',
+                })
+              }).catch(() => {
+                BackgroundMonitor.saveFirebaseConfig({
+                  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || '',
+                  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || '',
+                  userId: firebaseUser.uid,
+                  authToken: token,
+                  phone: '',
+                  fcmToken: '',
+                  serverKey: '',
+                  clientEmail: '',
+                  privateKey: '',
+                  displayName: firebaseUser.displayName || '',
+                })
+              })
             })
 
             BackgroundMonitor.fetchFcmToken({ userId: firebaseUser.uid }).then(({ fcmToken }) => {
               if (fcmToken) {
+                const cleanToken = fcmToken.replace(/\s/g, '')
                 import('firebase/firestore').then(({ doc, setDoc, getFirestore }) => {
                   const db = getFirestore()
-                  setDoc(doc(db, 'users', firebaseUser.uid), { fcmToken }, { merge: true })
-                    .then(() => console.log('[AuthProvider] FCM token saved to Firestore via JS SDK'))
+                  setDoc(doc(db, 'users', firebaseUser.uid), { fcmToken: cleanToken }, { merge: true })
+                    .then(() => console.log('[AuthProvider] FCM token saved to Firestore'))
                     .catch((e) => console.error('[AuthProvider] Firestore save failed:', e.message))
                 })
               } else {

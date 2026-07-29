@@ -258,108 +258,156 @@ public class DangerAlertActivity extends AppCompatActivity {
                     }
 
                     String userName = "Unknown User";
-                    try {
-                        String accessToken = FcmHelper.getAccessToken(DangerAlertActivity.this);
-                        if (currentUserId != null && !currentUserId.isEmpty()) {
-                            String senderDoc = httpGetWithAuth("https://firestore.googleapis.com/v1/projects/"
-                                    + projectId + "/databases/(default)/documents/users/" + currentUserId, accessToken);
-                            if (senderDoc != null && senderDoc.contains("stringValue")) {
-                                JSONObject senderObj = new JSONObject(senderDoc);
-                                JSONObject senderFields = senderObj.optJSONObject("fields");
-                                if (senderFields != null) {
-                                    JSONObject nameObj = senderFields.optJSONObject("name");
-                                    if (nameObj != null) userName = nameObj.optString("stringValue", "Unknown User");
-                                }
-                            }
+                    String alertMsg = "";
+                    String fcmLastErr = "";
+
+                    String authToken = getSharedPreferences("capacitor", MODE_PRIVATE)
+                            .getString("firebase_auth_token", "");
+                    String accessToken = "";
+                    if (!authToken.isEmpty()) {
+                        accessToken = authToken;
+                        Log.i(TAG, "Using Firebase Auth token");
+                    } else {
+                        try {
+                            accessToken = FcmHelper.getAccessToken(DangerAlertActivity.this);
+                            Log.i(TAG, "Using service account token");
+                        } catch (Exception e) {
+                            fcmLastErr = e.getMessage();
+                            Log.e(TAG, "getAccessToken failed", e);
                         }
-                    } catch (Exception e) {
-                        Log.w(TAG, "Failed to get user name: " + e.getMessage());
                     }
 
-                    String alertMsg = userName + " needs help!\n"
+                    if (!accessToken.isEmpty()) {
+                        String displayName = getSharedPreferences("capacitor", MODE_PRIVATE)
+                                .getString("user_display_name", "");
+                        if (displayName != null && !displayName.isEmpty()) {
+                            userName = displayName;
+                        } else {
+                            try {
+                                String senderDoc = httpGetWithAuth("https://firestore.googleapis.com/v1/projects/"
+                                        + projectId + "/databases/(default)/documents/users/" + currentUserId, accessToken);
+                                if (senderDoc != null && senderDoc.contains("stringValue")) {
+                                    JSONObject senderObj = new JSONObject(senderDoc);
+                                    JSONObject senderFields = senderObj.optJSONObject("fields");
+                                    if (senderFields != null) {
+                                        JSONObject nameObj = senderFields.optJSONObject("name");
+                                        if (nameObj != null) userName = nameObj.optString("stringValue", "Unknown User");
+                                    }
+                                }
+                            } catch (Exception e) {
+                                Log.w(TAG, "Failed to get user name: " + e.getMessage());
+                            }
+                        }
+                    }
+
+                    alertMsg = userName + " needs help!\n"
                             + "Danger: " + dangerType.toUpperCase() + " detected\n"
                             + "Location: " + locationName;
                     if (lat != 0) {
                         alertMsg += String.format(Locale.getDefault(), " (%.4f, %.4f)", lat, lng);
                     }
 
-                    String membersJson = getSharedPreferences("capacitor", MODE_PRIVATE)
-                            .getString("trusted_members", "[]");
-                    String pendingFcm = getSharedPreferences("capacitor", MODE_PRIVATE)
-                            .getString("pending_fcm_token", "");
                     String savedFcm = getSharedPreferences("capacitor", MODE_PRIVATE)
                             .getString("fcm_token", "");
-                    String fcmError = getSharedPreferences("capacitor", MODE_PRIVATE)
-                            .getString("fcm_error", "");
-                    Log.i(TAG, "Trusted members raw: " + membersJson);
 
                     int fcmSent = 0;
+                    int fcmFailed = 0;
                     int parsedCount = 0;
                     int emptyTokens = 0;
-                    String firstMemberDoc = "";
+                    String debugMemberToken = "N/A";
+
+                    java.util.ArrayList<String> memberUids = new java.util.ArrayList<>();
+                    if (!accessToken.isEmpty()) {
                     try {
-                        String accessToken = FcmHelper.getAccessToken(DangerAlertActivity.this);
-                        Log.i(TAG, "Access token obtained OK");
+                        String queryBody = "{\"structuredQuery\":{\"from\":[{\"collectionId\":\"group_members\"}],"
+                                + "\"where\":{\"fieldFilter\":{\"field\":{\"fieldPath\":\"groupId\"},"
+                                + "\"op\":\"EQUAL\","
+                                + "\"value\":{\"stringValue\":\"" + currentUserId + "\"}}},"
+                                + "\"limit\":100}}";
+                        String membersUrl = "https://firestore.googleapis.com/v1/projects/"
+                                + projectId + "/databases/(default)/documents:runQuery";
+                        String membersJson = httpPostWithAuth(membersUrl, queryBody, accessToken);
 
-                        JSONArray membersArr = new JSONArray(membersJson);
-                        parsedCount = membersArr.length();
+                    String fcmAccessToken = accessToken;
+                    if (fcmAccessToken.startsWith("ey")) {
+                        try {
+                            String saToken = FcmHelper.getAccessToken(DangerAlertActivity.this);
+                            fcmAccessToken = saToken;
+                            Log.i(TAG, "Service account token obtained OK");
+                        } catch (Exception e) {
+                            fcmLastErr = "getAccessToken: " + e.getMessage();
+                            Log.e(TAG, "getAccessToken failed for FCM", e);
+                        }
+                    }
 
-                        for (int i = 0; i < membersArr.length(); i++) {
-                            JSONObject member = membersArr.getJSONObject(i);
-                            String memberUid = member.optString("uid", "");
-                            if (memberUid.isEmpty()) continue;
+                        if (membersJson != null && membersJson.contains("document")) {
+                            JSONArray docsArray = new JSONArray(membersJson);
+                            parsedCount = docsArray.length();
 
-                            String memberDoc = httpGetWithAuth("https://firestore.googleapis.com/v1/projects/"
-                                    + projectId + "/databases/(default)/documents/users/" + memberUid,
-                                    accessToken);
-                            String fcmToken = null;
-                            String memberName = "member";
-                            Log.i(TAG, "Member doc response length: " + (memberDoc != null ? memberDoc.length() : 0));
-                            if (memberDoc != null && memberDoc.contains("stringValue")) {
-                                JSONObject docObj = new JSONObject(memberDoc);
+                            for (int i = 0; i < docsArray.length(); i++) {
+                                JSONObject docWrapper = docsArray.getJSONObject(i);
+                                JSONObject docObj = docWrapper.optJSONObject("document");
+                                if (docObj == null) continue;
                                 JSONObject fields = docObj.optJSONObject("fields");
-                                if (fields != null) {
-                                    JSONObject fcmObj = fields.optJSONObject("fcmToken");
-                                    if (fcmObj != null) fcmToken = fcmObj.optString("stringValue", "");
-                                    JSONObject nameObj = fields.optJSONObject("name");
-                                    if (nameObj != null) memberName = nameObj.optString("stringValue", "member");
+                                if (fields == null) continue;
+
+                                JSONObject userIdField = fields.optJSONObject("userId");
+                                String memberUid = userIdField != null ? userIdField.optString("stringValue", "") : "";
+                                if (memberUid.isEmpty()) continue;
+                                memberUids.add(memberUid);
+
+                                String memberDoc = httpGetWithAuth("https://firestore.googleapis.com/v1/projects/"
+                                        + projectId + "/databases/(default)/documents/users/" + memberUid,
+                                        accessToken);
+                                String fcmToken = null;
+                                String memberName = "member";
+                                if (memberDoc != null && memberDoc.contains("stringValue")) {
+                                    JSONObject memberDocObj = new JSONObject(memberDoc);
+                                    JSONObject memberFields = memberDocObj.optJSONObject("fields");
+                                    if (memberFields != null) {
+                                        JSONObject fcmObj = memberFields.optJSONObject("fcmToken");
+                                        if (fcmObj != null) fcmToken = fcmObj.optString("stringValue", "");
+                                        JSONObject nameObj = memberFields.optJSONObject("name");
+                                        if (nameObj != null) memberName = nameObj.optString("stringValue", "member");
+                                    }
                                 }
-                            }
 
-                            Log.i(TAG, "Member " + i + ": " + memberName + " fcmToken=" + (fcmToken != null ? "FOUND" : "EMPTY"));
+                                if (debugMemberToken.equals("N/A") && fcmToken != null && !fcmToken.isEmpty()) debugMemberToken = fcmToken;
 
-                            if (i == 0) {
-                                firstMemberDoc = memberDoc == null ? "NULL" :
-                                        memberDoc.substring(0, Math.min(200, memberDoc.length()));
-                            }
-                            if (fcmToken == null || fcmToken.isEmpty()) { emptyTokens++; continue; }
-                            try {
-                                FcmHelper.sendPush(accessToken, fcmToken,
-                                        "DANGER: " + dangerType.toUpperCase(), alertMsg);
-                                fcmSent++;
-                            } catch (Exception fcmErr) {
-                                Log.e(TAG, "FCM push failed", fcmErr);
+                                if (fcmToken == null || fcmToken.isEmpty()) { emptyTokens++; continue; }
+                                fcmToken = fcmToken.trim().replaceAll("\\s+", "");
+                                try {
+                                    FcmHelper.sendPush(fcmAccessToken, fcmToken,
+                                            "DANGER: " + dangerType.toUpperCase(), alertMsg);
+                                    fcmSent++;
+                                } catch (Exception fcmErr) {
+                                    fcmFailed++;
+                                    fcmLastErr = fcmErr.getMessage();
+                                    Log.e(TAG, "FCM push failed", fcmErr);
+                                }
                             }
                         }
                     } catch (Exception e) {
                         Log.e(TAG, "Failed", e);
                     }
+                    } // end if accessToken
+
+                    saveHelpMessage(accessToken, projectId, currentUserId, userName, dangerType, alertMsg, lat, lng, locationName, memberUids);
 
                     String debugInfo = "\n[Debug] Members: " + parsedCount
                             + " | Empty tokens: " + emptyTokens
                             + " | FCM sent: " + fcmSent
-                            + "\nYour saved token: " + (savedFcm.isEmpty() ? "NONE" : savedFcm.substring(0, Math.min(20, savedFcm.length())) + "...")
-                            + (fcmError.isEmpty() ? "" : "\nFCM Error: " + fcmError);
-
-                    if (parsedCount > 0 && fcmSent == 0) {
-                        debugInfo += "\nMember0 doc: " + firstMemberDoc;
-                    }
+                            + "\nYour token: " + (savedFcm.isEmpty() ? "NONE" : savedFcm.substring(0, Math.min(20, savedFcm.length())) + "...")
+                            + "\nMember0 token: " + debugMemberToken
+                            + (fcmFailed > 0 ? "\nFCM Error(" + fcmFailed + "): " + fcmLastErr : "")
+                            + (fcmLastErr.isEmpty() || fcmFailed > 0 ? "" : "\nAccessToken Error: " + fcmLastErr);
 
                     if (fcmSent > 0) {
-                        // showResult("Push notification sent to " + fcmSent + " member!" + debugInfo + "\n\n" + alertMsg);
-                        showResult("Push notification sent to " + fcmSent + " member!");
-                    } else if (emptyTokens > 0) {
+                        showResult("Push notification sent to " + fcmSent + " member!" + debugInfo);
+                    } else if (parsedCount > 0 && emptyTokens > 0) {
                         showResult("Found " + parsedCount + " member(s) but they don't have FCM tokens yet.\nMember needs to open the app and start monitoring first." + debugInfo);
+                    } else if (parsedCount > 0 && fcmFailed > 0) {
+                        showResult("Found " + parsedCount + " member(s) but push failed.\nCheck member app/network/service account permissions." + debugInfo);
                     } else {
                         showResult("No trusted group members found.\nAdd members in Trusted Group settings." + debugInfo);
                     }
@@ -508,9 +556,15 @@ public class DangerAlertActivity extends AppCompatActivity {
             r.close();
             return sb.toString();
         } else {
-            Log.w(TAG, "HTTP " + code + " for " + urlStr);
+            BufferedReader r = new BufferedReader(new InputStreamReader(c.getErrorStream()));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = r.readLine()) != null) sb.append(line);
+            r.close();
+            String err = sb.toString();
+            Log.w(TAG, "HTTP " + code + " for " + urlStr + " body=" + err);
+            throw new Exception("HTTP " + code + " for " + urlStr + " body=" + err);
         }
-        return null;
     }
 
     private void showResult(final String message) {
@@ -610,6 +664,49 @@ public class DangerAlertActivity extends AppCompatActivity {
             return sb.toString();
         }
         return null;
+    }
+
+    private void saveHelpMessage(String accessToken, String projectId, String currentUserId, String userName, String dangerType, String alertMsg, double lat, double lng, String locationName, java.util.List<String> receiverIds) {
+        try {
+            if (accessToken == null || accessToken.isEmpty()) {
+                Log.w(TAG, "saveHelpMessage skipped: empty accessToken");
+                return;
+            }
+
+            org.json.JSONArray idsArray = new org.json.JSONArray();
+            for (String id : receiverIds) {
+                idsArray.put(new org.json.JSONObject("{\"stringValue\":\"" + id + "\"}"));
+            }
+
+            org.json.JSONObject fields = new org.json.JSONObject();
+            fields.put("senderId", new org.json.JSONObject("{\"stringValue\":\"" + currentUserId + "\"}"));
+            fields.put("senderName", new org.json.JSONObject("{\"stringValue\":\"" + escapeJson(userName) + "\"}"));
+            fields.put("receiverIds", new org.json.JSONObject("{\"arrayValue\":{\"values\":[]}"));
+            fields.getJSONObject("receiverIds").getJSONObject("arrayValue").put("values", idsArray);
+            fields.put("dangerType", new org.json.JSONObject("{\"stringValue\":\"" + escapeJson(dangerType.toLowerCase()) + "\"}"));
+            fields.put("alertMsg", new org.json.JSONObject("{\"stringValue\":\"" + escapeJson(alertMsg) + "\"}"));
+            if (lat != 0) fields.put("lat", new org.json.JSONObject("{\"doubleValue\":" + lat + "}"));
+            if (lng != 0) fields.put("lng", new org.json.JSONObject("{\"doubleValue\":" + lng + "}"));
+            if (locationName != null && !locationName.isEmpty()) {
+                fields.put("locationName", new org.json.JSONObject("{\"stringValue\":\"" + escapeJson(locationName) + "\"}"));
+            }
+
+            java.util.Date now = new java.util.Date();
+            java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US);
+            sdf.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+            String timestamp = sdf.format(now);
+            fields.put("createdAt", new org.json.JSONObject("{\"timestampValue\":\"" + timestamp + "\"}"));
+
+            String body = "{\"fields\":" + fields.toString() + "}";
+            String url = "https://firestore.googleapis.com/v1/projects/"
+                    + projectId + "/databases/(default)/documents/help_history";
+
+            Log.i(TAG, "saveHelpMessage POST url=" + url);
+            String helpSaveResult = httpPostWithAuth(url, body, accessToken);
+            Log.i(TAG, "saveHelpMessage result=" + helpSaveResult);
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to save help message", e);
+        }
     }
 
     private String escapeJson(String s) {
