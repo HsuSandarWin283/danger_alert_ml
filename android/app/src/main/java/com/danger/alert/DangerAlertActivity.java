@@ -188,10 +188,13 @@ public class DangerAlertActivity extends AppCompatActivity {
     private void sendHelpWithLocation() {
         final boolean[] done = {false};
 
-        new Handler(Looper.getMainLooper()).postDelayed(() -> {
-            if (!done[0]) {
-                done[0] = true;
-                doSendHelp(0, 0, "Location unavailable (timeout)");
+        new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                if (!done[0]) {
+                    done[0] = true;
+                    doSendHelp(0, 0, "Location unavailable (timeout)");
+                }
             }
         }, 5000);
 
@@ -317,8 +320,9 @@ public class DangerAlertActivity extends AppCompatActivity {
                     String debugMemberToken = "N/A";
 
                     java.util.ArrayList<String> memberUids = new java.util.ArrayList<>();
+                    String helpSaveStatus = "HelpHistory: pending";
+
                     if (!accessToken.isEmpty()) {
-                    try {
                         String queryBody = "{\"structuredQuery\":{\"from\":[{\"collectionId\":\"group_members\"}],"
                                 + "\"where\":{\"fieldFilter\":{\"field\":{\"fieldPath\":\"groupId\"},"
                                 + "\"op\":\"EQUAL\","
@@ -328,17 +332,15 @@ public class DangerAlertActivity extends AppCompatActivity {
                                 + projectId + "/databases/(default)/documents:runQuery";
                         String membersJson = httpPostWithAuth(membersUrl, queryBody, accessToken);
 
-                    String fcmAccessToken = accessToken;
-                    if (fcmAccessToken.startsWith("ey")) {
-                        try {
-                            String saToken = FcmHelper.getAccessToken(DangerAlertActivity.this);
-                            fcmAccessToken = saToken;
-                            Log.i(TAG, "Service account token obtained OK");
-                        } catch (Exception e) {
-                            fcmLastErr = "getAccessToken: " + e.getMessage();
-                            Log.e(TAG, "getAccessToken failed for FCM", e);
+                        String fcmAccessToken = accessToken;
+                        if (fcmAccessToken.startsWith("ey")) {
+                            try {
+                                String saToken = FcmHelper.getAccessToken(DangerAlertActivity.this);
+                                fcmAccessToken = saToken;
+                            } catch (Exception e) {
+                                fcmLastErr = "getAccessToken: " + e.getMessage();
+                            }
                         }
-                    }
 
                         if (membersJson != null && membersJson.contains("document")) {
                             JSONArray docsArray = new JSONArray(membersJson);
@@ -387,12 +389,25 @@ public class DangerAlertActivity extends AppCompatActivity {
                                 }
                             }
                         }
-                    } catch (Exception e) {
-                        Log.e(TAG, "Failed", e);
                     }
-                    } // end if accessToken
 
-                    saveHelpMessage(accessToken, projectId, currentUserId, userName, dangerType, alertMsg, lat, lng, locationName, memberUids);
+                    String helpAccessToken = accessToken;
+                    if (helpAccessToken == null || helpAccessToken.isEmpty() || helpAccessToken.startsWith("ey")) {
+                        try {
+                            helpAccessToken = FcmHelper.getAccessToken(DangerAlertActivity.this);
+                        } catch (Exception e) {
+                            helpAccessToken = accessToken;
+                        }
+                    }
+
+                    Log.i(TAG, "help save token prefix=" + (helpAccessToken != null ? helpAccessToken.substring(0, Math.min(20, helpAccessToken.length())) : "null"));
+
+                    try {
+                        saveHelpMessage(helpAccessToken, projectId, currentUserId, userName, dangerType, alertMsg, lat, lng, locationName, memberUids);
+                        helpSaveStatus = "HelpHistory: saved to Firestore";
+                    } catch (Exception e) {
+                        helpSaveStatus = "HelpHistory: save failed - " + e.getMessage();
+                    }
 
                     String debugInfo = "\n[Debug] Members: " + parsedCount
                             + " | Empty tokens: " + emptyTokens
@@ -403,13 +418,13 @@ public class DangerAlertActivity extends AppCompatActivity {
                             + (fcmLastErr.isEmpty() || fcmFailed > 0 ? "" : "\nAccessToken Error: " + fcmLastErr);
 
                     if (fcmSent > 0) {
-                        showResult("Push notification sent to " + fcmSent + " member!" + debugInfo);
+                        showResult("Push notification sent to " + fcmSent + " member!" + debugInfo + "\n" + helpSaveStatus);
                     } else if (parsedCount > 0 && emptyTokens > 0) {
-                        showResult("Found " + parsedCount + " member(s) but they don't have FCM tokens yet.\nMember needs to open the app and start monitoring first." + debugInfo);
+                        showResult("Found " + parsedCount + " member(s) but they don't have FCM tokens yet.\nMember needs to open the app and start monitoring first." + debugInfo + "\n" + helpSaveStatus);
                     } else if (parsedCount > 0 && fcmFailed > 0) {
-                        showResult("Found " + parsedCount + " member(s) but push failed.\nCheck member app/network/service account permissions." + debugInfo);
+                        showResult("Found " + parsedCount + " member(s) but push failed.\nCheck member app/network/service account permissions." + debugInfo + "\n" + helpSaveStatus);
                     } else {
-                        showResult("No trusted group members found.\nAdd members in Trusted Group settings." + debugInfo);
+                        showResult("No trusted group members found.\nAdd members in Trusted Group settings." + debugInfo + "\n" + helpSaveStatus);
                     }
 
                 } catch (Exception e) {
@@ -507,33 +522,81 @@ public class DangerAlertActivity extends AppCompatActivity {
 
     private void sendFcmPush(String fcmToken, String title, String body) throws Exception {
         String projectId = getFirebaseProjectId();
-        String accessToken = getFcmAccessToken();
+        String serverKey = getFirebaseServerKey();
+        if (projectId == null || serverKey == null) {
+            throw new Exception("FCM not configured");
+        }
 
         String jsonBody = "{"
-                + "\"message\":{"
-                + "\"token\":\"" + fcmToken + "\","
+                + "\"to\":\"" + fcmToken + "\","
                 + "\"notification\":{"
                 + "\"title\":\"" + escapeJson(title) + "\","
                 + "\"body\":\"" + escapeJson(body) + "\""
                 + "},"
-                + "\"android\":{"
-                + "\"priority\":\"high\","
-                + "\"notification\":{\"channel_id\":\"danger_alert\"}"
-                + "}"
-                + "}"
+                + "\"priority\":\"high\""
                 + "}";
 
-        java.net.URL url = new java.net.URL("https://fcm.googleapis.com/v1/projects/" + projectId + "/messages:send");
-        java.net.HttpURLConnection c = (java.net.HttpURLConnection) url.openConnection();
+        URL url = new URL("https://fcm.googleapis.com/fcm/send");
+        HttpURLConnection c = (HttpURLConnection) url.openConnection();
         c.setRequestMethod("POST");
         c.setRequestProperty("Content-Type", "application/json");
-        c.setRequestProperty("Authorization", "Bearer " + accessToken);
+        c.setRequestProperty("Authorization", "key=" + serverKey);
+        c.setConnectTimeout(10000);
+        c.setReadTimeout(10000);
         c.setDoOutput(true);
-        java.io.OutputStream os = c.getOutputStream();
-        os.write(jsonBody.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        OutputStream os = c.getOutputStream();
+        os.write(jsonBody.getBytes(StandardCharsets.UTF_8));
         os.close();
+
         int code = c.getResponseCode();
         Log.i(TAG, "FCM v1 response: " + code);
+    }
+
+    private String httpGet(String urlStr) throws Exception {
+        return httpGetWithAuth(urlStr, null);
+    }
+
+    private String httpGetWithAuth(String urlStr, String bearerToken) throws Exception {
+        HttpURLConnection c = (HttpURLConnection) new URL(urlStr).openConnection();
+        c.setRequestMethod("GET");
+        c.setConnectTimeout(10000);
+        c.setReadTimeout(10000);
+        if (bearerToken != null && !bearerToken.isEmpty()) {
+            c.setRequestProperty("Authorization", "Bearer " + bearerToken);
+        }
+        if (c.getResponseCode() == 200) {
+            BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream()));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = r.readLine()) != null) sb.append(line);
+            r.close();
+            return sb.toString();
+        }
+        return null;
+    }
+
+    private String httpPost(String urlStr, String body) throws Exception {
+        HttpURLConnection c = (HttpURLConnection) new URL(urlStr).openConnection();
+        c.setRequestMethod("POST");
+        c.setRequestProperty("Content-Type", "application/json");
+        String token = getFirebaseAuthToken();
+        if (token != null && !token.isEmpty()) {
+            c.setRequestProperty("Authorization", "Bearer " + token);
+        }
+        c.setDoOutput(true);
+        OutputStream os = c.getOutputStream();
+        os.write(body.getBytes(StandardCharsets.UTF_8));
+        os.close();
+        int code = c.getResponseCode();
+        if (code >= 200 && code < 300) {
+            BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream()));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = r.readLine()) != null) sb.append(line);
+            r.close();
+            return sb.toString();
+        }
+        return null;
     }
 
     private String httpPostWithAuth(String urlStr, String body, String bearerToken) throws Exception {
@@ -619,94 +682,48 @@ public class DangerAlertActivity extends AppCompatActivity {
         return getSharedPreferences("capacitor", MODE_PRIVATE).getString("firebase_auth_token", null);
     }
 
-    private String httpGet(String urlStr) throws Exception {
-        return httpGetWithAuth(urlStr, null);
-    }
-
-    private String httpGetWithAuth(String urlStr, String bearerToken) throws Exception {
-        HttpURLConnection c = (HttpURLConnection) new URL(urlStr).openConnection();
-        c.setRequestMethod("GET");
-        c.setConnectTimeout(10000);
-        c.setReadTimeout(10000);
-        if (bearerToken != null && !bearerToken.isEmpty()) {
-            c.setRequestProperty("Authorization", "Bearer " + bearerToken);
+    private void saveHelpMessage(String accessToken, String projectId, String currentUserId, String userName, String dangerType, String alertMsg, double lat, double lng, String locationName, java.util.List<String> receiverIds) throws Exception {
+        if (accessToken == null || accessToken.isEmpty()) {
+            Log.w(TAG, "saveHelpMessage skipped: empty accessToken");
+            return;
         }
-        if (c.getResponseCode() == 200) {
-            BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream()));
-            StringBuilder sb = new StringBuilder();
-            String line;
-            while ((line = r.readLine()) != null) sb.append(line);
-            r.close();
-            return sb.toString();
+
+        org.json.JSONArray idsArray = new org.json.JSONArray();
+        for (String id : receiverIds) {
+            idsArray.put(new org.json.JSONObject("{\"stringValue\":\"" + id + "\"}"));
         }
-        return null;
-    }
 
-    private String httpPost(String urlStr, String body) throws Exception {
-        HttpURLConnection c = (HttpURLConnection) new URL(urlStr).openConnection();
-        c.setRequestMethod("POST");
-        c.setRequestProperty("Content-Type", "application/json");
-        String token = getFirebaseAuthToken();
-        if (token != null && !token.isEmpty()) {
-            c.setRequestProperty("Authorization", "Bearer " + token);
+        org.json.JSONObject valuesObj = new org.json.JSONObject();
+        valuesObj.put("values", idsArray);
+
+        org.json.JSONObject arrayValueObj = new org.json.JSONObject();
+        arrayValueObj.put("arrayValue", valuesObj);
+
+        org.json.JSONObject fields = new org.json.JSONObject();
+        fields.put("senderId", new org.json.JSONObject("{\"stringValue\":\"" + currentUserId + "\"}"));
+        fields.put("senderName", new org.json.JSONObject("{\"stringValue\":\"" + escapeJson(userName) + "\"}"));
+        fields.put("receiverIds", arrayValueObj);
+        fields.put("dangerType", new org.json.JSONObject("{\"stringValue\":\"" + escapeJson(dangerType.toLowerCase()) + "\"}"));
+        fields.put("alertMsg", new org.json.JSONObject("{\"stringValue\":\"" + escapeJson(alertMsg) + "\"}"));
+        if (lat != 0) fields.put("lat", new org.json.JSONObject("{\"doubleValue\":" + lat + "}"));
+        if (lng != 0) fields.put("lng", new org.json.JSONObject("{\"doubleValue\":" + lng + "}"));
+        if (locationName != null && !locationName.isEmpty()) {
+            fields.put("locationName", new org.json.JSONObject("{\"stringValue\":\"" + escapeJson(locationName) + "\"}"));
         }
-        c.setDoOutput(true);
-        OutputStream os = c.getOutputStream();
-        os.write(body.getBytes(StandardCharsets.UTF_8));
-        os.close();
-        int code = c.getResponseCode();
-        if (code >= 200 && code < 300) {
-            BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream()));
-            StringBuilder sb = new StringBuilder();
-            String line;
-            while ((line = r.readLine()) != null) sb.append(line);
-            r.close();
-            return sb.toString();
-        }
-        return null;
-    }
 
-    private void saveHelpMessage(String accessToken, String projectId, String currentUserId, String userName, String dangerType, String alertMsg, double lat, double lng, String locationName, java.util.List<String> receiverIds) {
-        try {
-            if (accessToken == null || accessToken.isEmpty()) {
-                Log.w(TAG, "saveHelpMessage skipped: empty accessToken");
-                return;
-            }
+        java.util.Date now = new java.util.Date();
+        java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US);
+        sdf.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+        String timestamp = sdf.format(now);
+        fields.put("createdAt", new org.json.JSONObject("{\"timestampValue\":\"" + timestamp + "\"}"));
 
-            org.json.JSONArray idsArray = new org.json.JSONArray();
-            for (String id : receiverIds) {
-                idsArray.put(new org.json.JSONObject("{\"stringValue\":\"" + id + "\"}"));
-            }
+        String body = "{\"fields\":" + fields.toString() + "}";
+        String url = "https://firestore.googleapis.com/v1/projects/"
+                + projectId + "/databases/(default)/documents/help_history";
 
-            org.json.JSONObject fields = new org.json.JSONObject();
-            fields.put("senderId", new org.json.JSONObject("{\"stringValue\":\"" + currentUserId + "\"}"));
-            fields.put("senderName", new org.json.JSONObject("{\"stringValue\":\"" + escapeJson(userName) + "\"}"));
-            fields.put("receiverIds", new org.json.JSONObject("{\"arrayValue\":{\"values\":[]}"));
-            fields.getJSONObject("receiverIds").getJSONObject("arrayValue").put("values", idsArray);
-            fields.put("dangerType", new org.json.JSONObject("{\"stringValue\":\"" + escapeJson(dangerType.toLowerCase()) + "\"}"));
-            fields.put("alertMsg", new org.json.JSONObject("{\"stringValue\":\"" + escapeJson(alertMsg) + "\"}"));
-            if (lat != 0) fields.put("lat", new org.json.JSONObject("{\"doubleValue\":" + lat + "}"));
-            if (lng != 0) fields.put("lng", new org.json.JSONObject("{\"doubleValue\":" + lng + "}"));
-            if (locationName != null && !locationName.isEmpty()) {
-                fields.put("locationName", new org.json.JSONObject("{\"stringValue\":\"" + escapeJson(locationName) + "\"}"));
-            }
-
-            java.util.Date now = new java.util.Date();
-            java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US);
-            sdf.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
-            String timestamp = sdf.format(now);
-            fields.put("createdAt", new org.json.JSONObject("{\"timestampValue\":\"" + timestamp + "\"}"));
-
-            String body = "{\"fields\":" + fields.toString() + "}";
-            String url = "https://firestore.googleapis.com/v1/projects/"
-                    + projectId + "/databases/(default)/documents/help_history";
-
-            Log.i(TAG, "saveHelpMessage POST url=" + url);
-            String helpSaveResult = httpPostWithAuth(url, body, accessToken);
-            Log.i(TAG, "saveHelpMessage result=" + helpSaveResult);
-        } catch (Exception e) {
-            Log.w(TAG, "Failed to save help message", e);
-        }
+        Log.i(TAG, "saveHelpMessage POST url=" + url);
+        String helpSaveResult = httpPostWithAuth(url, body, accessToken);
+        Log.i(TAG, "saveHelpMessage result=" + (helpSaveResult != null ? helpSaveResult.substring(0, Math.min(200, helpSaveResult.length())) : "null"));
     }
 
     private String escapeJson(String s) {

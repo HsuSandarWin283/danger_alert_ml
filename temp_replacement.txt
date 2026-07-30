@@ -1,0 +1,105 @@
+                    java.util.ArrayList<String> memberUids = new java.util.ArrayList<>();
+                    String helpSaveStatus = "HelpHistory: pending";
+
+                    if (!accessToken.isEmpty()) {
+                        String queryBody = "{\"structuredQuery\":{\"from\":[{\"collectionId\":\"group_members\"}],"
+                                + "\"where\":{\"fieldFilter\":{\"field\":{\"fieldPath\":\"groupId\"},"
+                                + "\"op\":\"EQUAL\","
+                                + "\"value\":{\"stringValue\":\"" + currentUserId + "\"}}},"
+                                + "\"limit\":100}}";
+                        String membersUrl = "https://firestore.googleapis.com/v1/projects/"
+                                + projectId + "/databases/(default)/documents:runQuery";
+                        String membersJson = httpPostWithAuth(membersUrl, queryBody, accessToken);
+
+                        String fcmAccessToken = accessToken;
+                        if (fcmAccessToken.startsWith("ey")) {
+                            try {
+                                String saToken = FcmHelper.getAccessToken(DangerAlertActivity.this);
+                                fcmAccessToken = saToken;
+                            } catch (Exception e) {
+                                fcmLastErr = "getAccessToken: " + e.getMessage();
+                            }
+                        }
+
+                        if (membersJson != null && membersJson.contains("document")) {
+                            JSONArray docsArray = new JSONArray(membersJson);
+                            parsedCount = docsArray.length();
+
+                            for (int i = 0; i < docsArray.length(); i++) {
+                                JSONObject docWrapper = docsArray.getJSONObject(i);
+                                JSONObject docObj = docWrapper.optJSONObject("document");
+                                if (docObj == null) continue;
+                                JSONObject fields = docObj.optJSONObject("fields");
+                                if (fields == null) continue;
+
+                                JSONObject userIdField = fields.optJSONObject("userId");
+                                String memberUid = userIdField != null ? userIdField.optString("stringValue", "") : "";
+                                if (memberUid.isEmpty()) continue;
+                                memberUids.add(memberUid);
+
+                                String memberDoc = httpGetWithAuth("https://firestore.googleapis.com/v1/projects/"
+                                        + projectId + "/databases/(default)/documents/users/" + memberUid,
+                                        accessToken);
+                                String fcmToken = null;
+                                String memberName = "member";
+                                if (memberDoc != null && memberDoc.contains("stringValue")) {
+                                    JSONObject memberDocObj = new JSONObject(memberDoc);
+                                    JSONObject memberFields = memberDocObj.optJSONObject("fields");
+                                    if (memberFields != null) {
+                                        JSONObject fcmObj = memberFields.optJSONObject("fcmToken");
+                                        if (fcmObj != null) fcmToken = fcmObj.optString("stringValue", "");
+                                        JSONObject nameObj = memberFields.optJSONObject("name");
+                                        if (nameObj != null) memberName = nameObj.optString("stringValue", "member");
+                                    }
+                                }
+
+                                if (debugMemberToken.equals("N/A") && fcmToken != null && !fcmToken.isEmpty()) debugMemberToken = fcmToken;
+
+                                if (fcmToken == null || fcmToken.isEmpty()) { emptyTokens++; continue; }
+                                fcmToken = fcmToken.trim().replaceAll("\\s+", "");
+                                try {
+                                    FcmHelper.sendPush(fcmAccessToken, fcmToken,
+                                            "DANGER: " + dangerType.toUpperCase(), alertMsg);
+                                    fcmSent++;
+                                } catch (Exception fcmErr) {
+                                    fcmFailed++;
+                                    fcmLastErr = fcmErr.getMessage();
+                                    Log.e(TAG, "FCM push failed", fcmErr);
+                                }
+                            }
+                        }
+                    }
+
+                    String helpAccessToken = accessToken;
+                    if (helpAccessToken == null || helpAccessToken.isEmpty() || helpAccessToken.startsWith("ey")) {
+                        try {
+                            helpAccessToken = getFcmAccessToken();
+                        } catch (Exception e) {
+                            helpAccessToken = accessToken;
+                        }
+                    }
+
+                    try {
+                        saveHelpMessage(helpAccessToken, projectId, currentUserId, userName, dangerType, alertMsg, lat, lng, locationName, memberUids);
+                        helpSaveStatus = "HelpHistory: saved to Firestore";
+                    } catch (Exception e) {
+                        helpSaveStatus = "HelpHistory: save failed - " + e.getMessage();
+                    }
+
+                    String debugInfo = "\n[Debug] Members: " + parsedCount
+                            + " | Empty tokens: " + emptyTokens
+                            + " | FCM sent: " + fcmSent
+                            + "\nYour token: " + (savedFcm.isEmpty() ? "NONE" : savedFcm.substring(0, Math.min(20, savedFcm.length())) + "...")
+                            + "\nMember0 token: " + debugMemberToken
+                            + (fcmFailed > 0 ? "\nFCM Error(" + fcmFailed + "): " + fcmLastErr : "")
+                            + (fcmLastErr.isEmpty() || fcmFailed > 0 ? "" : "\nAccessToken Error: " + fcmLastErr);
+
+                    if (fcmSent > 0) {
+                        showResult("Push notification sent to " + fcmSent + " member!" + debugInfo + "\n" + helpSaveStatus);
+                    } else if (parsedCount > 0 && emptyTokens > 0) {
+                        showResult("Found " + parsedCount + " member(s) but they don't have FCM tokens yet.\nMember needs to open the app and start monitoring first." + debugInfo + "\n" + helpSaveStatus);
+                    } else if (parsedCount > 0 && fcmFailed > 0) {
+                        showResult("Found " + parsedCount + " member(s) but push failed.\nCheck member app/network/service account permissions." + debugInfo + "\n" + helpSaveStatus);
+                    } else {
+                        showResult("No trusted group members found.\nAdd members in Trusted Group settings." + debugInfo + "\n" + helpSaveStatus);
+                    }
