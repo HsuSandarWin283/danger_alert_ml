@@ -58,6 +58,7 @@ export async function getHelpHistoryForUser(userId: string): Promise<HelpMessage
     ...sentSnap.docs.map(toHelpMessage),
     ...receivedSnap.docs.map(toHelpMessage),
   ]
+  console.log('[HelpHistory] userId=', userId, 'sent=', sentSnap.size, 'received=', receivedSnap.size, 'total=', results.length)
   const seen = new Set<string>()
   const unique = results.filter((item) => {
     if (!item.id) return true

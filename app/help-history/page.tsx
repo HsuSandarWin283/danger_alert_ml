@@ -12,7 +12,11 @@ export default function HelpHistoryPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (!authLoading) {
+      console.log('[HelpHistoryPage] auth state', { user: user?.uid, email: user?.email, loading: authLoading })
+    }
     if (!authLoading && !user) {
+      console.log('[HelpHistoryPage] no user, redirecting to login')
       router.replace('/login')
     }
   }, [user, authLoading, router])
@@ -24,9 +28,12 @@ export default function HelpHistoryPage() {
       setLoading(true)
       try {
         const data = await getHelpHistoryForUser(user.uid)
-        if (!cancelled) setItems(data)
+        if (!cancelled) {
+          setItems(data)
+          console.log('[HelpHistoryPage] loaded for', user.uid, 'count=', data.length, data)
+        }
       } catch (err) {
-        console.error('Failed to load help history', err)
+        console.error('[HelpHistoryPage] Failed to load help history', err)
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -92,11 +99,11 @@ export default function HelpHistoryPage() {
                     </span>
                   </div>
                   <p className="text-gray-700 whitespace-pre-line">{item.alertMsg}</p>
-                  {(item.lat !== undefined && item.lng !== undefined) && (
+                  {/* {(item.lat !== undefined && item.lng !== undefined) && (
                     <p className="text-sm text-gray-500 mt-2">
                       Location: {item.locationName || `${item.lat.toFixed(4)}, ${item.lng.toFixed(4)}`}
                     </p>
-                  )}
+                  )} */}
                 </div>
               )
             })}

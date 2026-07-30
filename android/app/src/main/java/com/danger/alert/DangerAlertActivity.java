@@ -418,7 +418,8 @@ public class DangerAlertActivity extends AppCompatActivity {
                             + (fcmLastErr.isEmpty() || fcmFailed > 0 ? "" : "\nAccessToken Error: " + fcmLastErr);
 
                     if (fcmSent > 0) {
-                        showResult("Push notification sent to " + fcmSent + " member!" + debugInfo + "\n" + helpSaveStatus);
+                        // showResult("Push notification sent to " + fcmSent + " member!" + debugInfo + "\n" + helpSaveStatus);
+                        showResult("Push notification sent to " + fcmSent + " member!");
                     } else if (parsedCount > 0 && emptyTokens > 0) {
                         showResult("Found " + parsedCount + " member(s) but they don't have FCM tokens yet.\nMember needs to open the app and start monitoring first." + debugInfo + "\n" + helpSaveStatus);
                     } else if (parsedCount > 0 && fcmFailed > 0) {
