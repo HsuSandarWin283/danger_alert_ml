@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '@/app/auth-provider'
 import { useRouter } from 'next/navigation'
 import { getHelpHistoryForUser, type HelpMessage } from '@/app/lib/help-history'
+import Navbar from '@/app/components/Navbar'
 
 export default function HelpHistoryPage() {
   const { user, loading: authLoading } = useAuth()
@@ -12,11 +13,7 @@ export default function HelpHistoryPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!authLoading) {
-      console.log('[HelpHistoryPage] auth state', { user: user?.uid, email: user?.email, loading: authLoading })
-    }
     if (!authLoading && !user) {
-      console.log('[HelpHistoryPage] no user, redirecting to login')
       router.replace('/login')
     }
   }, [user, authLoading, router])
@@ -56,15 +53,7 @@ export default function HelpHistoryPage() {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      <nav className="bg-black text-white px-6 py-4 flex justify-between items-center">
-        <h1 className="text-2xl font-bold">AI Safety Companion</h1>
-        <button
-          onClick={() => router.push('/')}
-          className="px-4 py-2 bg-gray-800 rounded-xl hover:bg-gray-700 transition"
-        >
-          Back to Dashboard
-        </button>
-      </nav>
+      <Navbar userEmail={user.email} showBack onBack={() => router.push('/')} onLogout={() => {}} />
 
       <div className="max-w-4xl mx-auto px-6 py-10">
         <h2 className="text-3xl font-bold text-gray-800 mb-2">Help History</h2>
@@ -99,11 +88,11 @@ export default function HelpHistoryPage() {
                     </span>
                   </div>
                   <p className="text-gray-700 whitespace-pre-line">{item.alertMsg}</p>
-                  {/* {(item.lat !== undefined && item.lng !== undefined) && (
+                  {(item.lat !== undefined && item.lng !== undefined) && (
                     <p className="text-sm text-gray-500 mt-2">
                       Location: {item.locationName || `${item.lat.toFixed(4)}, ${item.lng.toFixed(4)}`}
                     </p>
-                  )} */}
+                  )}
                 </div>
               )
             })}

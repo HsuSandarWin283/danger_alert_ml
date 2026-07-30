@@ -57,7 +57,7 @@ export default function Home() {
 
   return (
     <main className="bg-gray-100 min-h-screen">
-      <Navbar userEmail={user.email} onLogout={handleLogout} />
+      <Navbar userEmail={user.email} onLogout={handleLogout} showBack={false} onBack={() => {}} />
       <HeroSection />
       <div className="max-w-6xl mx-auto px-6 py-10 grid md:grid-cols-2 gap-6">
         <StatusCard error={error} />
