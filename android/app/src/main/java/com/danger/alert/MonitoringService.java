@@ -84,7 +84,9 @@ public class MonitoringService extends Service {
             }
         }
 
-        Notification notification = buildNotification("Monitoring for danger sounds...");
+        NotificationStrings ns = new NotificationStrings(this);
+
+        Notification notification = buildNotification(ns.monitoringForDangerSounds());
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(NOTIFICATION_ID, notification,
                     ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
@@ -98,20 +100,22 @@ public class MonitoringService extends Service {
 
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationStrings ns = new NotificationStrings(this);
+
             NotificationChannel channel = new NotificationChannel(
                     CHANNEL_ID,
-                    "Danger Sound Monitoring",
+                    ns.channelMonitoringName(),
                     NotificationManager.IMPORTANCE_LOW
             );
-            channel.setDescription("Shows when danger sound monitoring is active");
+            channel.setDescription(ns.channelMonitoringDesc());
             channel.setSound(null, null);
 
             NotificationChannel alertChannel = new NotificationChannel(
                     ALERT_CHANNEL_ID,
-                    "Danger Alerts",
+                    ns.channelAlertsName(),
                     NotificationManager.IMPORTANCE_HIGH
             );
-            alertChannel.setDescription("Critical danger sound alerts");
+            alertChannel.setDescription(ns.channelAlertsDesc());
             alertChannel.enableVibration(true);
             alertChannel.setVibrationPattern(new long[]{0, 500, 200, 500});
             alertChannel.enableLights(true);
@@ -139,12 +143,14 @@ public class MonitoringService extends Service {
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
 
+        NotificationStrings ns = new NotificationStrings(this);
+
         return new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle("Danger Alert")
+                .setContentTitle(ns.notificationTitle())
                 .setContentText(text)
                 .setSmallIcon(android.R.drawable.ic_dialog_alert)
                 .setContentIntent(pendingIntent)
-                .addAction(android.R.drawable.ic_media_pause, "Stop", stopPendingIntent)
+                .addAction(android.R.drawable.ic_media_pause, ns.stop(), stopPendingIntent)
                 .setOngoing(true)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .setCategory(NotificationCompat.CATEGORY_SERVICE)
@@ -179,20 +185,23 @@ public class MonitoringService extends Service {
             );
         } catch (SecurityException e) {
             Log.e(TAG, "Microphone permission not granted", e);
-            updateNotification("Microphone permission denied");
+            NotificationStrings ns = new NotificationStrings(this);
+            updateNotification(ns.micPermissionDenied());
             return;
         }
 
         if (audioRecord.getState() != AudioRecord.STATE_INITIALIZED) {
             Log.e(TAG, "AudioRecord failed to initialize");
-            updateNotification("Audio recording unavailable");
+            NotificationStrings ns = new NotificationStrings(this);
+            updateNotification(ns.audioUnavailable());
             return;
         }
 
         isRecording.set(true);
         audioRecord.startRecording();
         Log.i(TAG, "Monitoring started");
-        updateNotification("Listening for danger sounds...");
+        NotificationStrings ns2 = new NotificationStrings(this);
+        updateNotification(ns2.listeningForDangerSounds());
 
         executor.execute(this::recordingLoop);
     }
@@ -331,9 +340,11 @@ public class MonitoringService extends Service {
                         PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE
                 );
 
+                NotificationStrings ns = new NotificationStrings(this);
+
                 NotificationCompat.Builder alertBuilder = new NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
-                        .setContentTitle("DANGER: " + prediction.toUpperCase() + " detected!")
-                        .setContentText("Are you OK?")
+                        .setContentTitle(ns.dangerDetectedTitle(prediction))
+                        .setContentText(ns.areYouOk())
                         .setSmallIcon(android.R.drawable.ic_dialog_alert)
                         .setPriority(NotificationCompat.PRIORITY_MAX)
                         .setCategory(NotificationCompat.CATEGORY_ALARM)

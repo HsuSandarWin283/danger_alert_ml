@@ -1,10 +1,12 @@
 "use client"
 
 import { useMicrophoneContext } from "@/app/lib/MicrophoneProvider"
+import { useLang } from "@/app/lib/LanguageProvider"
 import { useEffect, useRef } from "react"
 
 export default function AudioVisualizer() {
   const { isRecording, rmsLevel, lastPrediction } = useMicrophoneContext()
+  const { t } = useLang()
   const canvasRef = useRef(null)
   const audioContextRef = useRef(null)
   const analyserRef = useRef(null)
@@ -92,7 +94,7 @@ export default function AudioVisualizer() {
     <section className="max-w-6xl mx-auto px-6 py-10">
       <div className="bg-white rounded-3xl shadow-lg p-8">
         <h2 className="text-3xl font-bold mb-6">
-          Live Audio Spectrogram
+          {t('liveSpectrogram')}
         </h2>
 
         <canvas
@@ -104,16 +106,16 @@ export default function AudioVisualizer() {
 
         <div className="mt-4 grid md:grid-cols-2 gap-4">
           <div className="bg-gray-50 rounded-xl p-4">
-            <p className="text-sm text-gray-500">RMS Level</p>
+            <p className="text-sm text-gray-500">{t('rmsLevel')}</p>
             <p className="text-xl font-bold">{rmsLevel.toFixed(4)}</p>
           </div>
 
           <div className="bg-gray-50 rounded-xl p-4">
-            <p className="text-sm text-gray-500">Last Prediction</p>
+            <p className="text-sm text-gray-500">{t('lastPrediction')}</p>
             <p className="text-xl font-bold">
               {lastPrediction
                 ? `${lastPrediction.prediction} (${Math.round(lastPrediction.confidence * 100)}%)`
-                : 'Waiting for detection...'}
+                : t('waitingForDetection')}
             </p>
           </div>
         </div>

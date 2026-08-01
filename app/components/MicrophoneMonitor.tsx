@@ -1,9 +1,11 @@
 "use client"
 
 import { useMicrophoneContext } from "@/app/lib/MicrophoneProvider"
+import { useLang } from "@/app/lib/LanguageProvider"
 
 export default function MicrophoneMonitor() {
   const { isRecording, recordingTime, permissionState, rmsLevel, lastPrediction, startRecording, stopRecording, error } = useMicrophoneContext()
+  const { t } = useLang()
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
@@ -14,17 +16,17 @@ export default function MicrophoneMonitor() {
   return (
     <div className="max-w-2xl mx-auto px-6 py-10">
       <div className="bg-white rounded-3xl shadow-lg p-8">
-        <h1 className="text-3xl font-bold mb-6 text-center">Microphone Monitor</h1>
+        <h1 className="text-3xl font-bold mb-6 text-center">{t('micMonitorTitle')}</h1>
 
         <div className="mb-6">
           <div className="flex items-center justify-center gap-2 mb-4">
-            <span className="text-sm font-medium text-gray-600">Status:</span>
+            <span className="text-sm font-medium text-gray-600">{t('status')}:</span>
             <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
               isRecording
                 ? "bg-green-100 text-green-800"
                 : "bg-gray-100 text-gray-800"
             }`}>
-              {isRecording ? "Active" : "Inactive"}
+              {isRecording ? t('active') : t('inactive')}
             </span>
           </div>
 
@@ -54,14 +56,14 @@ export default function MicrophoneMonitor() {
 
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div className="bg-gray-50 rounded-xl p-4">
-              <p className="text-sm text-gray-500">RMS Level</p>
+              <p className="text-sm text-gray-500">{t('rmsLevel')}</p>
               <p className="text-xl font-bold">{rmsLevel.toFixed(4)}</p>
             </div>
 
             <div className="bg-gray-50 rounded-xl p-4">
-              <p className="text-sm text-gray-500">Last Prediction</p>
+              <p className="text-sm text-gray-500">{t('lastPrediction')}</p>
               <p className="text-xl font-bold">
-                {lastPrediction ? `${lastPrediction.prediction} (${Math.round(lastPrediction.confidence * 100)}%)` : 'None'}
+                {lastPrediction ? `${lastPrediction.prediction} (${Math.round(lastPrediction.confidence * 100)}%)` : t('none')}
               </p>
             </div>
           </div>
@@ -82,7 +84,7 @@ export default function MicrophoneMonitor() {
                   : "bg-blue-600 text-white hover:bg-blue-700 active:scale-95"
               }`}
             >
-              Start Monitoring
+              {t('startMonitoringBtn')}
             </button>
             <button
               onClick={stopRecording}
@@ -93,13 +95,13 @@ export default function MicrophoneMonitor() {
                   : "bg-red-600 text-white hover:bg-red-700 active:scale-95"
               }`}
             >
-              Stop Monitoring
+              {t('stopMonitoringBtn')}
             </button>
           </div>
 
           <div className="mt-4 text-center">
             <span className="text-xs text-gray-500">
-              Permission: {permissionState}
+              {t('permission')}: {permissionState}
             </span>
           </div>
         </div>

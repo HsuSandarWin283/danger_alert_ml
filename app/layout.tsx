@@ -1,6 +1,7 @@
 import "./globals.css";
 import { AuthProvider } from "./auth-provider";
 import { MicrophoneProvider } from "./lib/MicrophoneProvider";
+import { LanguageProvider } from "./lib/LanguageProvider";
 import PullToRefresh from "./components/PullToRefresh";
 
 export const metadata = {
@@ -17,11 +18,13 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
-        <AuthProvider>
-          <MicrophoneProvider>
-            <PullToRefresh>{children}</PullToRefresh>
-          </MicrophoneProvider>
-        </AuthProvider>
+        <LanguageProvider>
+          <AuthProvider>
+            <MicrophoneProvider>
+              <PullToRefresh>{children}</PullToRefresh>
+            </MicrophoneProvider>
+          </AuthProvider>
+        </LanguageProvider>
       </body>
     </html>
   );

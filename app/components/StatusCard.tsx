@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { useMicrophoneContext } from "@/app/lib/MicrophoneProvider"
+import { useLang } from "@/app/lib/LanguageProvider"
 
 type StatusCardProps = {
   error?: string | null
@@ -9,6 +10,7 @@ type StatusCardProps = {
 
 export default function StatusCard({ error = null }: StatusCardProps) {
   const { isRecording } = useMicrophoneContext()
+  const { t } = useLang()
   const [apiStatus, setApiStatus] = useState("checking")
   const retryRef = useRef(0)
   const MAX_RETRIES = 10
@@ -55,31 +57,31 @@ export default function StatusCard({ error = null }: StatusCardProps) {
   return (
     <div className="bg-white rounded-3xl shadow-lg p-8">
       <h2 className="text-3xl font-bold mb-6">
-        System Status
+        {t('systemStatus')}
       </h2>
 
       <div className="space-y-4">
         <div className="flex justify-between">
-          <span>Microphone</span>
+          <span>{t('microphone')}</span>
           <span className={`font-bold ${
             microphoneActive ? "text-green-600" : "text-gray-500"
           }`}>
-            {microphoneActive ? "Active" : "Inactive"}
+            {microphoneActive ? t('active') : t('inactive')}
           </span>
         </div>
 
         <div className="flex justify-between">
-          <span>AI Model</span>
+          <span>{t('aiModel')}</span>
           <span className={`font-bold ${
             apiStatus === "healthy" ? "text-green-600" : apiStatus === "checking" ? "text-yellow-500" : "text-red-600"
           }`}>
-            {apiStatus === "healthy" ? "Running" : apiStatus === "checking" ? "Checking..." : "Offline"}
+            {apiStatus === "healthy" ? t('running') : apiStatus === "checking" ? t('checking') : t('offline')}
           </span>
         </div>
 
         <div className="flex justify-between">
-          <span>Environment</span>
-          <span className="text-yellow-500 font-bold">Monitoring</span>
+          <span>{t('environment')}</span>
+          <span className="text-yellow-500 font-bold">{t('monitoringLabel')}</span>
         </div>
 
         {error && (

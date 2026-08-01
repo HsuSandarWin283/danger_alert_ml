@@ -65,17 +65,19 @@ public class MainActivity extends BridgeActivity {
             NotificationManager manager = getSystemService(NotificationManager.class);
             if (manager == null) return;
 
+            NotificationStrings ns = new NotificationStrings(this);
+
             NotificationChannel monitoringChannel = new NotificationChannel(
-                    "danger_monitoring", "Danger Sound Monitoring",
+                    "danger_monitoring", ns.channelMonitoringName(),
                     NotificationManager.IMPORTANCE_LOW);
-            monitoringChannel.setDescription("Shows when danger sound monitoring is active");
+            monitoringChannel.setDescription(ns.channelMonitoringDesc());
             monitoringChannel.setSound(null, null);
             manager.createNotificationChannel(monitoringChannel);
 
             NotificationChannel alertChannel = new NotificationChannel(
-                    "danger_alert", "Danger Alerts",
+                    "danger_alert", ns.channelAlertsName(),
                     NotificationManager.IMPORTANCE_HIGH);
-            alertChannel.setDescription("Critical danger sound alerts");
+            alertChannel.setDescription(ns.channelAlertsDesc());
             alertChannel.enableVibration(true);
             alertChannel.setVibrationPattern(new long[]{0, 500, 200, 500});
             alertChannel.enableLights(true);

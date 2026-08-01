@@ -1,6 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
+import { useLang } from '@/app/lib/LanguageProvider'
 
 function BackIcon() {
   return (
@@ -10,37 +11,17 @@ function BackIcon() {
   )
 }
 
-function HelpHistoryIcon() {
+function SettingsIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
-      <path d="M12 22a2.5 2.5 0 0 0 2.5-2.5h-5A2.5 2.5 0 0 0 12 22zm7.5-6.5V11a8 8 0 1 0-15 0v4.5l-1.5 1.5v2h17v-2l-1.6-1.5z" />
-    </svg>
-  )
-}
-
-function ProfileIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
-      <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-4.42 0-8 1.79-8 4v2h16v-2c0-2.21-3.58-4-8-4z" />
-    </svg>
-  )
-}
-
-function LogoutIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
-      <path d="M10.09 15.59 11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67l-2.58 2.59zM19 3H5a2 2 0 0 0-2 2v4h2V5h14v14H5v-4H3v4a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z" />
+      <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.49.49 0 00-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 00-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 00-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1115.6 12 3.6 3.6 0 0112 15.6z" />
     </svg>
   )
 }
 
 export default function Navbar({ userEmail, onLogout, showBack, onBack }) {
   const router = useRouter()
-  const handleLogoutClick = () => {
-    if (window.confirm('Are you sure you want to logout?')) {
-      onLogout?.()
-    }
-  }
+  const { t } = useLang()
 
   return (
     <nav className="bg-black text-white px-6 py-4 flex justify-between items-center">
@@ -49,7 +30,7 @@ export default function Navbar({ userEmail, onLogout, showBack, onBack }) {
           <button
             onClick={onBack || (() => router.push('/'))}
             className="p-2 bg-gray-800 rounded-full hover:bg-gray-700 transition"
-            title="Back"
+            title={t('back')}
           >
             <BackIcon />
           </button>
@@ -60,32 +41,18 @@ export default function Navbar({ userEmail, onLogout, showBack, onBack }) {
 
       {userEmail && !showBack ? (
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => router.push('/help-history')}
-            className="p-2 bg-gray-800 rounded-full hover:bg-gray-700 transition"
-            title="Help History"
-          >
-            <HelpHistoryIcon />
-          </button>
-          <button
-            onClick={() => router.push('/profile')}
-            className="p-2 bg-gray-800 rounded-full hover:bg-gray-700 transition"
-            title="Profile"
-          >
-            <ProfileIcon />
-          </button>
           <span className="text-sm hidden sm:inline">{userEmail}</span>
           <button
-            onClick={handleLogoutClick}
-            className="p-2 bg-red-500 rounded-full hover:bg-red-600 transition"
-            title="Logout"
+            onClick={() => router.push('/settings')}
+            className="p-2 bg-gray-800 rounded-full hover:bg-gray-700 transition"
+            title={t('settings')}
           >
-            <LogoutIcon />
+            <SettingsIcon />
           </button>
         </div>
       ) : !userEmail ? (
         <button className="px-4 py-2 bg-red-500 rounded-xl hover:bg-red-600 transition">
-          Emergency SOS
+          {t('emergencySOS')}
         </button>
       ) : null}
     </nav>

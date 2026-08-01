@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import BackgroundMonitor from '@/app/lib/background-monitor'
+import { useLang } from '@/app/lib/LanguageProvider'
 
 function getDetectedAnswer(detail) {
   if (typeof detail === 'string') return detail
@@ -40,6 +41,7 @@ export default function DangerAlert({ detectedAnswer, confidence }) {
   const [sending, setSending] = useState(false)
   const [lastSend, setLastSend] = useState(null)
   const [sendStatus, setSendStatus] = useState(null)
+  const { t } = useLang()
 
   useEffect(() => {
     const handleDangerDetected = (event) => {
@@ -63,7 +65,7 @@ export default function DangerAlert({ detectedAnswer, confidence }) {
   }, [])
 
   const displayAnswer =
-    detectedAnswer || eventDetection.detectedAnswer || 'Waiting for detection...'
+    detectedAnswer || eventDetection.detectedAnswer || t('waitingForDetection')
   const displayConfidence = formatConfidence(
     confidence ?? eventDetection.confidence,
   )
@@ -81,7 +83,7 @@ export default function DangerAlert({ detectedAnswer, confidence }) {
       setLastSend({ ...result, success: true })
       setSendStatus('success')
     } catch (err) {
-      setLastSend({ error: err.message ?? 'send failed', success: false })
+      setLastSend({ error: err.message ?? t('sendFailed'), success: false })
       setSendStatus('error')
     } finally {
       setSending(false)
@@ -95,7 +97,7 @@ export default function DangerAlert({ detectedAnswer, confidence }) {
         disabled={sending}
         className="w-full bg-black py-3 rounded-xl hover:bg-gray-900 transition disabled:opacity-50 mb-4 text-white"
       >
-        {sending ? 'Sending...' : 'Send Emergency Alert'}
+        {sending ? t('sending') : t('sendEmergencyAlert')}
       </button>
       {sendStatus && sendStatus !== 'idle' && (
         <div className={`text-sm p-3 rounded-xl border-2 ${
@@ -103,25 +105,25 @@ export default function DangerAlert({ detectedAnswer, confidence }) {
           sendStatus === 'error' ? 'bg-red-500 text-white border-red-400' :
           'bg-yellow-500 text-white border-yellow-400'
         }`}>
-          {sendStatus === 'success' ? '✓ Send success' :
-           sendStatus === 'error' ? `✗ Error: ${lastSend?.error ?? 'send failed'}` :
-           'Sending...'}
+          {sendStatus === 'success' ? `✓ ${t('sendSuccess')}` :
+           sendStatus === 'error' ? `✗ Error: ${lastSend?.error ?? t('sendFailed')}` :
+           t('sending')}
         </div>
       )}
 
       <div className="bg-red-500 text-white rounded-3xl shadow-lg p-8">
         <h2 className="text-3xl font-bold mb-6">
-          Danger Detection
+          {t('dangerDetection')}
         </h2>
 
         <div className="space-y-4">
           <div className="bg-white/20 p-4 rounded-xl">
-            <p className="text-lg">Detected Sound</p>
+            <p className="text-lg">{t('detectedSound')}</p>
             <h3 className="text-2xl font-bold">{displayAnswer}</h3>
           </div>
 
           <div className="bg-white/20 p-4 rounded-xl">
-            <p className="text-lg">Confidence</p>
+            <p className="text-lg">{t('confidence')}</p>
             <h3 className="text-2xl font-bold">{displayConfidence}</h3>
           </div>
         </div>

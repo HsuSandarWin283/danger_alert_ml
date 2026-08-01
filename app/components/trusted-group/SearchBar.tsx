@@ -1,12 +1,17 @@
 'use client'
 
+import { useLang } from '@/app/lib/LanguageProvider'
+
 interface SearchBarProps {
   value: string
   onChange: (value: string) => void
   placeholder?: string
 }
 
-export default function SearchBar({ value, onChange, placeholder = 'Search users...' }: SearchBarProps) {
+export default function SearchBar({ value, onChange, placeholder }: SearchBarProps) {
+  const { t } = useLang()
+  const displayPlaceholder = placeholder ?? t('searchUsers')
+
   return (
     <div className="relative">
       <svg
@@ -27,7 +32,7 @@ export default function SearchBar({ value, onChange, placeholder = 'Search users
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
+        placeholder={displayPlaceholder}
         className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
       />
     </div>

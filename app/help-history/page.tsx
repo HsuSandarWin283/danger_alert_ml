@@ -5,10 +5,12 @@ import { useAuth } from '@/app/auth-provider'
 import { useRouter } from 'next/navigation'
 import { getHelpHistoryForUser, type HelpMessage } from '@/app/lib/help-history'
 import Navbar from '@/app/components/Navbar'
+import { useLang } from '@/app/lib/LanguageProvider'
 
 export default function HelpHistoryPage() {
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
+  const { t } = useLang()
   const [items, setItems] = useState<HelpMessage[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -27,7 +29,6 @@ export default function HelpHistoryPage() {
         const data = await getHelpHistoryForUser(user.uid)
         if (!cancelled) {
           setItems(data)
-          console.log('[HelpHistoryPage] loaded for', user.uid, 'count=', data.length, data)
         }
       } catch (err) {
         console.error('[HelpHistoryPage] Failed to load help history', err)
@@ -44,7 +45,7 @@ export default function HelpHistoryPage() {
   if (authLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <p className="text-gray-600">Loading help history...</p>
+        <p className="text-gray-600">{t('loadingHelpHistory')}</p>
       </div>
     )
   }
@@ -53,15 +54,15 @@ export default function HelpHistoryPage() {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      <Navbar userEmail={user.email} showBack onBack={() => router.push('/')} onLogout={() => {}} />
+      <Navbar userEmail={user.email} showBack onBack={() => router.push('/settings')} onLogout={() => {}} />
 
       <div className="max-w-4xl mx-auto px-6 py-10">
-        <h2 className="text-3xl font-bold text-gray-800 mb-2">Help History</h2>
-        <p className="text-gray-600 mb-6">Alerts sent by you or received from your trusted group</p>
+        <h2 className="text-3xl font-bold text-gray-800 mb-2">{t('helpHistoryTitle')}</h2>
+        <p className="text-gray-600 mb-6">{t('helpHistoryDesc')}</p>
 
         {items.length === 0 ? (
           <div className="bg-white rounded-3xl shadow-lg p-10 text-center">
-            <p className="text-gray-500">No help alerts yet.</p>
+            <p className="text-gray-500">{t('noHelpAlerts')}</p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -72,25 +73,25 @@ export default function HelpHistoryPage() {
                   <div className="flex justify-between items-start mb-2">
                     <div>
                       <h3 className="text-xl font-bold text-gray-900">
-                        {item.dangerType ? `Danger: ${item.dangerType.toUpperCase()}` : 'Help Request'}
+                        {item.dangerType ? `${t('danger')}: ${item.dangerType.toUpperCase()}` : t('helpRequest')}
                       </h3>
                       <p className="text-sm text-gray-500">
                         {item.createdAt ? new Date(item.createdAt).toLocaleString() : ''}
                       </p>
                       <p className="text-xs text-gray-400 mt-1">
-                        {isSender ? `To: ${item.receiverIds?.length ?? 0} member(s)` : `From: ${item.senderName || item.senderId}`}
+                        {isSender ? `To: ${item.receiverIds?.length ?? 0} ${t('members')}` : `From: ${item.senderName || item.senderId}`}
                       </p>
                     </div>
                     <span className={`px-3 py-1 rounded-full text-xs font-semibold uppercase ${
                       isSender ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
                     }`}>
-                      {isSender ? 'Sent' : 'Received'}
+                      {isSender ? t('sent') : t('received')}
                     </span>
                   </div>
                   <p className="text-gray-700 whitespace-pre-line">{item.alertMsg}</p>
                   {(item.lat !== undefined && item.lng !== undefined) && (
                     <p className="text-sm text-gray-500 mt-2">
-                      Location: {item.locationName || `${item.lat.toFixed(4)}, ${item.lng.toFixed(4)}`}
+                      {t('location')}: {item.locationName || `${item.lat.toFixed(4)}, ${item.lng.toFixed(4)}`}
                     </p>
                   )}
                 </div>

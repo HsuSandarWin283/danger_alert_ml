@@ -1,6 +1,7 @@
 'use client'
 
 import { User } from '@/app/lib/trusted-group-types'
+import { useLang } from '@/app/lib/LanguageProvider'
 
 interface MemberCardProps {
   member: User & { joinedAt: Date }
@@ -9,6 +10,8 @@ interface MemberCardProps {
 }
 
 export default function MemberCard({ member, onRemove, removing }: MemberCardProps) {
+  const { t } = useLang()
+
   return (
     <div className="bg-white rounded-2xl shadow-md p-4 flex items-center gap-4 hover:shadow-lg transition">
       <img
@@ -20,10 +23,10 @@ export default function MemberCard({ member, onRemove, removing }: MemberCardPro
         }}
       />
       <div className="flex-1 min-w-0">
-        <h3 className="font-semibold text-gray-800 truncate">{member.name || 'Unnamed User'}</h3>
+        <h3 className="font-semibold text-gray-800 truncate">{member.name || t('unnamedUser')}</h3>
         <p className="text-sm text-gray-500 truncate">{member.email}</p>
         <p className="text-xs text-gray-400 mt-1">
-          Joined {new Date(member.joinedAt).toLocaleDateString()}
+          {t('joined')} {new Date(member.joinedAt).toLocaleDateString()}
         </p>
       </div>
       <button
@@ -31,7 +34,7 @@ export default function MemberCard({ member, onRemove, removing }: MemberCardPro
         disabled={removing}
         className="px-4 py-2 bg-red-100 text-red-700 rounded-xl hover:bg-red-200 disabled:opacity-50 transition"
       >
-        {removing ? 'Removing...' : 'Remove'}
+        {removing ? t('removing') : t('remove')}
       </button>
     </div>
   )

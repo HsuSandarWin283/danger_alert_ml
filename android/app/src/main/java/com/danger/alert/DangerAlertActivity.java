@@ -105,8 +105,10 @@ public class DangerAlertActivity extends AppCompatActivity {
         icon.setGravity(Gravity.CENTER);
         rootLayout.addView(icon);
 
+        NotificationStrings ns = new NotificationStrings(this);
+
         TextView title = new TextView(this);
-        title.setText("Danger Detected!");
+        title.setText(ns.dangerDetectedScreenTitle());
         title.setTextColor(Color.WHITE);
         title.setTextSize(28);
         title.setGravity(Gravity.CENTER);
@@ -114,7 +116,7 @@ public class DangerAlertActivity extends AppCompatActivity {
         rootLayout.addView(title);
 
         TextView message = new TextView(this);
-        message.setText("I found " + dangerType.toUpperCase() + " sound near you.\nAre you OK?");
+        message.setText(ns.dangerFoundMessage(dangerType));
         message.setTextColor(Color.WHITE);
         message.setTextSize(20);
         message.setGravity(Gravity.CENTER);
@@ -129,7 +131,7 @@ public class DangerAlertActivity extends AppCompatActivity {
         rootLayout.addView(timerView);
 
         Button okBtn = new Button(this);
-        okBtn.setText("I'm OK");
+        okBtn.setText(ns.imOk());
         okBtn.setTextSize(20);
         okBtn.setBackgroundColor(Color.parseColor("#16A34A"));
         okBtn.setTextColor(Color.WHITE);
@@ -146,7 +148,7 @@ public class DangerAlertActivity extends AppCompatActivity {
         rootLayout.addView(okBtn);
 
         Button helpBtn = new Button(this);
-        helpBtn.setText("I'm NOT OK - Send Help");
+        helpBtn.setText(ns.imNotOkSendHelp());
         helpBtn.setTextSize(20);
         helpBtn.setBackgroundColor(Color.WHITE);
         helpBtn.setTextColor(Color.parseColor("#DC2626"));
@@ -169,7 +171,8 @@ public class DangerAlertActivity extends AppCompatActivity {
             public void onTick(long millisUntilFinished) {
                 long mins = millisUntilFinished / 60000;
                 long secs = (millisUntilFinished % 60000) / 1000;
-                timerView.setText(String.format("Auto-send help in %02d:%02d", mins, secs));
+                NotificationStrings nsTick = new NotificationStrings(DangerAlertActivity.this);
+                timerView.setText(nsTick.autoSendHelp(mins, secs));
             }
 
             @Override
@@ -181,7 +184,8 @@ public class DangerAlertActivity extends AppCompatActivity {
 
     private void onSendHelp() {
         if (timer != null) timer.cancel();
-        showResult("Sending help request...");
+        NotificationStrings ns = new NotificationStrings(this);
+        showResult(ns.sendingHelpRequest());
         sendHelpWithLocation();
     }
 
@@ -193,7 +197,8 @@ public class DangerAlertActivity extends AppCompatActivity {
             public void run() {
                 if (!done[0]) {
                     done[0] = true;
-                    doSendHelp(0, 0, "Location unavailable (timeout)");
+                    NotificationStrings nsTimeout = new NotificationStrings(DangerAlertActivity.this);
+                    doSendHelp(0, 0, nsTimeout.locationUnavailable("timeout"));
                 }
             }
         }, 5000);
@@ -205,7 +210,8 @@ public class DangerAlertActivity extends AppCompatActivity {
             ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
                 != PackageManager.PERMISSION_GRANTED) {
             done[0] = true;
-            doSendHelp(0, 0, "Location unavailable (no permission)");
+            NotificationStrings nsPerm = new NotificationStrings(this);
+            doSendHelp(0, 0, nsPerm.locationUnavailable("no permission"));
             return;
         }
 
@@ -220,7 +226,8 @@ public class DangerAlertActivity extends AppCompatActivity {
                     String name = getLocationName(lat, lng);
                     doSendHelp(lat, lng, name);
                 } else {
-                    doSendHelp(0, 0, "Location unavailable");
+                    NotificationStrings nsLoc = new NotificationStrings(DangerAlertActivity.this);
+                    doSendHelp(0, 0, nsLoc.locationUnavailableDefault());
                 }
             }
         });
@@ -245,7 +252,8 @@ public class DangerAlertActivity extends AppCompatActivity {
 
     private void doSendHelp(final double lat, final double lng, final String locationName) {
         TextView msg = (TextView) rootLayout.getChildAt(2);
-        msg.setText("Sending help request...");
+        NotificationStrings ns = new NotificationStrings(this);
+        msg.setText(ns.sendingHelpRequest());
 
         executor.execute(new Runnable() {
             @Override
@@ -256,7 +264,8 @@ public class DangerAlertActivity extends AppCompatActivity {
                     String currentUserId = getCurrentUserId();
 
                     if (apiKey == null || projectId == null || currentUserId == null || currentUserId.isEmpty()) {
-                        showResult("Failed: Firebase not configured.\nuserId=" + currentUserId);
+                        NotificationStrings nsErr = new NotificationStrings(DangerAlertActivity.this);
+                        showResult(nsErr.failed("Firebase not configured.\nuserId=" + currentUserId));
                         return;
                     }
 
@@ -303,9 +312,9 @@ public class DangerAlertActivity extends AppCompatActivity {
                         }
                     }
 
-                    alertMsg = userName + " needs help!\n"
-                            + "Danger: " + dangerType.toUpperCase() + " detected\n"
-                            + "Location: " + locationName;
+                    alertMsg = userName + " " + ns.needsHelp() + "!\n"
+                            + ns.pushTitle(dangerType) + "\n"
+                            + ns.locationLabel() + ": " + locationName;
                     if (lat != 0) {
                         alertMsg += String.format(Locale.getDefault(), " (%.4f, %.4f)", lat, lng);
                     }
@@ -380,7 +389,7 @@ public class DangerAlertActivity extends AppCompatActivity {
                                 fcmToken = fcmToken.trim().replaceAll("\\s+", "");
                                 try {
                                     FcmHelper.sendPush(fcmAccessToken, fcmToken,
-                                            "DANGER: " + dangerType.toUpperCase(), alertMsg);
+                                            ns.pushTitle(dangerType), alertMsg);
                                     fcmSent++;
                                 } catch (Exception fcmErr) {
                                     fcmFailed++;
@@ -419,17 +428,18 @@ public class DangerAlertActivity extends AppCompatActivity {
 
                     if (fcmSent > 0) {
                         // showResult("Push notification sent to " + fcmSent + " member!" + debugInfo + "\n" + helpSaveStatus);
-                        showResult("Push notification sent to " + fcmSent + " member!");
+                        showResult(ns.pushSentTo(fcmSent));
                     } else if (parsedCount > 0 && emptyTokens > 0) {
-                        showResult("Found " + parsedCount + " member(s) but they don't have FCM tokens yet.\nMember needs to open the app and start monitoring first." + debugInfo + "\n" + helpSaveStatus);
+                        showResult(ns.foundMembersNoTokens(parsedCount) + debugInfo + "\n" + helpSaveStatus);
                     } else if (parsedCount > 0 && fcmFailed > 0) {
-                        showResult("Found " + parsedCount + " member(s) but push failed.\nCheck member app/network/service account permissions." + debugInfo + "\n" + helpSaveStatus);
+                        showResult(ns.foundMembersPushFailed(parsedCount) + debugInfo + "\n" + helpSaveStatus);
                     } else {
-                        showResult("No trusted group members found.\nAdd members in Trusted Group settings." + debugInfo + "\n" + helpSaveStatus);
+                        showResult(ns.noTrustedMembers() + debugInfo + "\n" + helpSaveStatus);
                     }
 
                 } catch (Exception e) {
-                    showResult("Failed: " + e.getMessage());
+                    NotificationStrings nsCatch = new NotificationStrings(DangerAlertActivity.this);
+                    showResult(nsCatch.failed(e.getMessage()));
                 }
             }
         });
@@ -652,7 +662,8 @@ public class DangerAlertActivity extends AppCompatActivity {
                 rootLayout.addView(txt);
 
                 Button closeBtn = new Button(DangerAlertActivity.this);
-                closeBtn.setText("Close");
+                NotificationStrings nsClose = new NotificationStrings(DangerAlertActivity.this);
+                closeBtn.setText(nsClose.close());
                 closeBtn.setTextSize(18);
                 closeBtn.setBackgroundColor(Color.WHITE);
                 closeBtn.setTextColor(Color.parseColor("#DC2626"));

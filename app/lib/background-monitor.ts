@@ -9,6 +9,7 @@ export interface BackgroundMonitorPlugin {
   sendTrustedAlert(options: { dangerType: string; confidence: number; alertMsg: string; members: string }): Promise<{ sent: number; total: number }>;
   sendEmergencyAlert(options: { dangerType: string; confidence: number; alertMsg: string }): Promise<{ sent: number; total: number }>;
   fetchFcmToken(options: { userId: string }): Promise<{ fcmToken: string }>;
+  setLanguage(options: { lang: string }): Promise<{ saved: boolean }>;
 }
 
 const BackgroundMonitor = registerPlugin<BackgroundMonitorPlugin>('BackgroundMonitor');

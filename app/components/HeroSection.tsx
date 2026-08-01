@@ -2,10 +2,12 @@
 
 import { useRouter } from 'next/navigation'
 import { useMicrophoneContext } from "@/app/lib/MicrophoneProvider"
+import { useLang } from "@/app/lib/LanguageProvider"
 
 export default function HeroSection() {
   const router = useRouter()
   const { isRecording, recordingTime, startRecording, stopRecording, error } = useMicrophoneContext()
+  const { t } = useLang()
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
@@ -16,12 +18,11 @@ export default function HeroSection() {
   return (
     <section className="text-center py-16 px-6 bg-gradient-to-r from-black to-gray-800 text-white">
       <h1 className="text-5xl font-bold mb-6">
-        AI-Powered Personal Safety
+        {t('heroTitle')}
       </h1>
 
       <p className="text-lg max-w-3xl mx-auto text-gray-300">
-        Real-time danger sound detection using CNN,
-        Mel-Spectrograms, and emergency alert systems.
+        {t('heroDesc')}
       </p>
 
       <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
@@ -30,27 +31,27 @@ export default function HeroSection() {
             onClick={stopRecording}
             className="bg-red-500 px-8 py-3 rounded-2xl text-lg hover:bg-red-600 transition"
           >
-            Stop Listening
+            {t('stopListening')}
           </button>
         ) : (
           <button
             onClick={startRecording}
             className="bg-green-500 px-8 py-3 rounded-2xl text-lg hover:bg-green-600 transition"
           >
-            Start Monitoring
+            {t('startMonitoring')}
           </button>
         )}
         <button
           onClick={() => router.push('/trusted-group')}
           className="bg-blue-600 px-8 py-3 rounded-2xl text-lg hover:bg-blue-700 transition"
         >
-          Trusted Group
+          {t('trustedGroup')}
         </button>
       </div>
 
       {isRecording && (
         <div className="mt-4 text-green-400 font-mono text-lg">
-          Monitoring...
+          {t('monitoring')}
         </div>
       )}
 

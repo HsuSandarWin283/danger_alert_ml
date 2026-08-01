@@ -4,9 +4,11 @@ import { useState } from 'react'
 import { signupWithEmail } from '@/app/lib/auth'
 import { createUserProfile } from '@/app/lib/user-profile'
 import { useRouter } from 'next/navigation'
+import { useLang } from '@/app/lib/LanguageProvider'
 
 export default function SignupForm() {
   const router = useRouter()
+  const { t } = useLang()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
@@ -26,7 +28,7 @@ export default function SignupForm() {
       router.push('/')
       router.refresh()
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Signup failed. Please try again.'
+      const message = err instanceof Error ? err.message : t('signupFailed')
       setError(message)
     } finally {
       setLoading(false)
@@ -37,13 +39,13 @@ export default function SignupForm() {
     <form onSubmit={handleSubmit} className="w-full">
       <div className="mb-4">
         <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-          Name
+          {t('name')}
         </label>
         <input
           id="name"
           name="name"
           type="text"
-          placeholder="Name"
+          placeholder={t('name')}
           value={name}
           onChange={(e) => setName(e.target.value)}
           className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
@@ -54,13 +56,13 @@ export default function SignupForm() {
 
       <div className="mb-4">
         <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-          Email
+          {t('email')}
         </label>
         <input
           id="email"
           name="email"
           type="email"
-          placeholder="Email"
+          placeholder={t('email')}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
@@ -71,7 +73,7 @@ export default function SignupForm() {
 
       <div className="mb-4">
         <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
-          Phone Number
+          {t('phoneNumber')}
         </label>
         <input
           id="phone"
@@ -88,13 +90,13 @@ export default function SignupForm() {
 
       <div className="mb-6">
         <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-          Password
+          {t('password')}
         </label>
         <input
           id="password"
           name="password"
           type="password"
-          placeholder="Password"
+          placeholder={t('password')}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
@@ -110,7 +112,7 @@ export default function SignupForm() {
         disabled={loading}
         className="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 disabled:opacity-50"
       >
-        {loading ? 'Creating account...' : 'Sign Up'}
+        {loading ? t('creatingAccount') : t('signUp')}
       </button>
     </form>
   )

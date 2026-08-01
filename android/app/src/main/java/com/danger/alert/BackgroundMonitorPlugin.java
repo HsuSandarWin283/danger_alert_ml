@@ -166,8 +166,9 @@ public class BackgroundMonitorPlugin extends Plugin {
                     String fcmToken = member.getString("fcmToken");
                     if (fcmToken == null || fcmToken.isEmpty()) continue;
                     try {
+                        NotificationStrings ns = new NotificationStrings(getContext());
                         FcmHelper.sendPush(accessToken, fcmToken,
-                                "DANGER: " + dangerType.toUpperCase(), alertMsg);
+                                ns.pushTitle(dangerType), alertMsg);
                         sent++;
                     } catch (Exception e) {
                         Log.w(TAG, "FCM failed for member " + i, e);
@@ -313,13 +314,16 @@ public class BackgroundMonitorPlugin extends Plugin {
             }
 
             int sent = 0;
-            String notificationBody = (userName != null && !userName.isEmpty() ? userName + " needs help" : "needs help");
+            NotificationStrings nsEmergency = new NotificationStrings(getContext());
+            String notificationBody = (userName != null && !userName.isEmpty()
+                    ? nsEmergency.needsHelpWithName(userName)
+                    : nsEmergency.needsHelp());
             if (lat[0] != 0 || lng[0] != 0) {
-                notificationBody += "\nLocation: " + locationName[0];
+                notificationBody += "\n" + nsEmergency.locationLabel() + ": " + locationName[0];
             }
             for (String token : memberTokens) {
                 try {
-                    FcmHelper.sendPush(accessToken, token, "DANGER: " + dangerType.toUpperCase(), notificationBody);
+                    FcmHelper.sendPush(accessToken, token, nsEmergency.pushTitle(dangerType), notificationBody);
                     sent++;
                 } catch (Exception e) {
                     Log.w(TAG, "FCM failed for token " + token, e);
@@ -423,6 +427,18 @@ public class BackgroundMonitorPlugin extends Plugin {
             String err = sb.toString();
             throw new Exception("HTTP " + code + " body=" + err);
         }
+    }
+
+    @PluginMethod
+    public void setLanguage(PluginCall call) {
+        String lang = call.getString("lang", "en");
+        getContext().getSharedPreferences("capacitor", android.content.Context.MODE_PRIVATE)
+                .edit()
+                .putString("app_lang", lang)
+                .apply();
+        JSObject result = new JSObject();
+        result.put("saved", true);
+        call.resolve(result);
     }
 
     @PluginMethod
