@@ -19,6 +19,14 @@ function SettingsIcon() {
   )
 }
 
+function ProfileIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
+      <path d="M12 12c2.67 0 8 1.34 8 4v2H4v-2c0-2.66 5.33-4 8-4zm0 0c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z" />
+    </svg>
+  )
+}
+
 export default function Navbar({ userEmail, onLogout, showBack, onBack }) {
   const router = useRouter()
   const { t } = useLang()
@@ -42,6 +50,13 @@ export default function Navbar({ userEmail, onLogout, showBack, onBack }) {
       {userEmail && !showBack ? (
         <div className="flex items-center gap-3">
           <span className="text-sm hidden sm:inline">{userEmail}</span>
+          <button
+            onClick={() => router.push('/profile')}
+            className="p-2 bg-gray-800 rounded-full hover:bg-gray-700 transition"
+            title={t('profile')}
+          >
+            <ProfileIcon />
+          </button>
           <button
             onClick={() => router.push('/settings')}
             className="p-2 bg-gray-800 rounded-full hover:bg-gray-700 transition"

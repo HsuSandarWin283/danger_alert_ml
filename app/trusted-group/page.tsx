@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '@/app/auth-provider'
 import { useRouter } from 'next/navigation'
 import { searchUsersOnce, addMemberToGroup, removeMemberFromGroup, getUserById, getGroupMembers } from '@/app/lib/trusted-group'
+import { subscribeToUser } from '@/app/lib/user-profile'
 import { SearchResult, User } from '@/app/lib/trusted-group-types'
 import UserCard from '@/app/components/trusted-group/UserCard'
 import MemberCard from '@/app/components/trusted-group/MemberCard'
@@ -22,6 +23,7 @@ export default function TrustedGroupPage() {
   const [removingUserId, setRemovingUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
+  const memberUnsubsRef = useRef<(() => void)[]>([])
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -58,11 +60,34 @@ export default function TrustedGroupPage() {
           return u ? { ...u, joinedAt: m.joinedAt } : null
         })
       )
-      setGroupMembers(memberData.filter((m): m is User & { joinedAt: Date } => m !== null))
+      const members = memberData.filter((m): m is User & { joinedAt: Date } => m !== null)
+      setGroupMembers(members)
       setInitialLoading(false)
+
+      memberUnsubsRef.current.forEach((unsub) => unsub())
+      memberUnsubsRef.current = []
+
+      members.forEach((m) => {
+        const unsub = subscribeToUser(m.uid, (updatedUser) => {
+          if (updatedUser) {
+            setGroupMembers((prev) =>
+              prev.map((member) =>
+                member.uid === updatedUser.uid
+                  ? { ...updatedUser, joinedAt: member.joinedAt }
+                  : member
+              )
+            )
+          }
+        })
+        memberUnsubsRef.current.push(unsub)
+      })
     })
 
-    return () => unsubscribe()
+    return () => {
+      unsubscribe()
+      memberUnsubsRef.current.forEach((unsub) => unsub())
+      memberUnsubsRef.current = []
+    }
   }, [user])
 
   const handleAddMember = async (userId: string) => {

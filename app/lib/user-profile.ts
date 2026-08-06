@@ -1,5 +1,5 @@
 import { db } from './firebase'
-import { doc, setDoc, getDoc } from 'firebase/firestore'
+import { doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore'
 import { User } from './trusted-group-types'
 
 const USERS_COLLECTION = 'users'
@@ -20,4 +20,14 @@ export async function getUserProfile(uid: string): Promise<User | null> {
     return { uid: docSnap.id, ...docSnap.data() } as User
   }
   return null
+}
+
+export function subscribeToUser(uid: string, callback: (user: User | null) => void): () => void {
+  return onSnapshot(doc(db, USERS_COLLECTION, uid), (snap) => {
+    if (snap.exists()) {
+      callback({ uid: snap.id, ...snap.data() } as User)
+    } else {
+      callback(null)
+    }
+  })
 }

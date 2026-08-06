@@ -82,10 +82,14 @@ export const translations: Record<Lang, Record<string, string>> = {
     phone: 'Phone',
     photoURL: 'Photo URL',
     saving: 'Saving...',
-    saveProfile: 'Save Profile',
+     saveProfile: 'Save Profile',
     profileUpdated: 'Profile updated',
     profileUpdateFailed: 'Failed to update profile',
     loading: 'Loading...',
+    tapToChangePhoto: 'Tap to change photo',
+    imageUploaded: 'Image uploaded successfully',
+    imageUploadFailed: 'Image upload failed',
+    imageTooLarge: 'Image is too large (max 5MB)',
 
     // Help History
     helpHistoryTitle: 'Help History',
@@ -212,6 +216,10 @@ export const translations: Record<Lang, Record<string, string>> = {
     profileUpdated: 'ပရိုဖိုင်ပြင်ဆင်ပြီးပါပြီ',
     profileUpdateFailed: 'ပရိုဖိုင်ပြင်ဆင်ခြင်းမအောင်မြင်ပါ',
     loading: 'ဖွင့်နေသည်...',
+    tapToChangePhoto: 'ဓာတ်ပုံပြင်ဆင်ရန် ကိုထုပ်ပါ',
+    imageUploaded: 'ဓာတ်ပုံတင်သွင်းမှုအောင်မြင်ပါပြီ',
+    imageUploadFailed: 'ဓာတ်ပုံတင်သွင်းခြင်းမအောင်မြင်ပါ',
+    imageTooLarge: 'ဓာတ်ပုံများလှန်ကယ် (အနမ်းဆုံး ၅MB)',
 
     // Help History
     helpHistoryTitle: 'အကူအညီ မှတ်တမ်း',
