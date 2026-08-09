@@ -32,6 +32,7 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [pendingFile, setPendingFile] = useState<File | null>(null)
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -81,19 +82,10 @@ export default function ProfilePage() {
       return
     }
 
-    setUploading(true)
-    setMessage(null)
-    try {
-      const url = await uploadToCloudinary(file)
-      setForm((prev) => ({ ...prev, photoURL: url }))
-      await setDoc(doc(db, 'users', user.uid), { photoURL: url }, { merge: true })
-      setMessage(t('imageUploaded'))
-    } catch (err) {
-      console.error('Image upload failed', err)
-      setMessage(t('imageUploadFailed'))
-    } finally {
-      setUploading(false)
-    }
+    setPendingFile(file)
+    const previewUrl = URL.createObjectURL(file)
+    setForm((prev) => ({ ...prev, photoURL: previewUrl }))
+    setMessage(t('tapToChangePhoto'))
   }
 
   const handleSubmit = async (e: FormEvent) => {
@@ -102,6 +94,21 @@ export default function ProfilePage() {
     setSaving(true)
     setMessage(null)
     try {
+      let photoURL = form.photoURL
+      if (pendingFile) {
+        setUploading(true)
+        try {
+          photoURL = await uploadToCloudinary(pendingFile)
+        } catch (err) {
+          console.error('Image upload failed', err)
+          setMessage(t('imageUploadFailed'))
+          setSaving(false)
+          setUploading(false)
+          return
+        } finally {
+          setUploading(false)
+        }
+      }
       const ref = doc(db, 'users', user.uid)
       await setDoc(
         ref,
@@ -110,10 +117,12 @@ export default function ProfilePage() {
           email: form.email,
           name: form.name,
           phone: form.phone || null,
-          photoURL: form.photoURL || null,
+          photoURL: photoURL || null,
         },
         { merge: true }
       )
+      setPendingFile(null)
+      setForm((prev) => ({ ...prev, photoURL: photoURL || '' }))
       setMessage(t('profileUpdated'))
     } catch (err) {
       console.error('Profile update failed', err)

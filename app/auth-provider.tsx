@@ -67,11 +67,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 console.error('[AuthProvider] fetchFcmToken returned empty token')
               }
             }).catch((e) => console.error('[AuthProvider] fetchFcmToken failed:', e.message))
+
+            BackgroundMonitor.getPendingNavigate().then(({ route }) => {
+              if (route) {
+                console.log('[AuthProvider] Pending navigate to:', route)
+                window.dispatchEvent(new CustomEvent('capacitor-navigate', { detail: { route } }))
+              }
+            }).catch((e) => console.error('[AuthProvider] getPendingNavigate failed:', e.message))
           })
         })
       }
     })
-    return () => unsubscribe()
+
+    let resumeListener: any = null
+    if (Capacitor.isNativePlatform()) {
+      import('@capacitor/app').then(({ App }) => {
+        resumeListener = App.addListener('appStateChange', ({ isActive }) => {
+          if (isActive) {
+            import('@/app/lib/background-monitor').then(({ default: BackgroundMonitor }) => {
+              BackgroundMonitor.getPendingNavigate().then(({ route }) => {
+                if (route) {
+                  console.log('[AuthProvider] Resume navigate to:', route)
+                  window.dispatchEvent(new CustomEvent('capacitor-navigate', { detail: { route } }))
+                }
+              })
+            })
+          }
+        })
+      })
+    }
+
+    return () => {
+      unsubscribe()
+      if (resumeListener) resumeListener.remove()
+    }
   }, [])
 
   return <AuthContext.Provider value={{ user, loading }}>{children}</AuthContext.Provider>

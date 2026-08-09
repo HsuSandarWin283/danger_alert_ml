@@ -2,6 +2,7 @@ package com.danger.alert;
 
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
@@ -33,6 +34,7 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
 
         createNotificationChannels();
+        handleNavigationIntent(getIntent());
 
         java.util.List<String> perms = new java.util.ArrayList<>();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -154,5 +156,28 @@ public class MainActivity extends BridgeActivity {
         SharedPreferences prefs = getSharedPreferences("capacitor", MODE_PRIVATE);
         String userId = prefs.getString("current_user_id", "");
         return userId != null ? userId : "";
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        handleNavigationIntent(intent);
+    }
+
+    private void handleNavigationIntent(Intent intent) {
+        if (intent == null) return;
+        String route = null;
+        if (intent.hasExtra("navigate_to")) {
+            route = intent.getStringExtra("navigate_to");
+        } else if (intent.hasExtra("route")) {
+            route = intent.getStringExtra("route");
+        }
+        if (route != null && !route.isEmpty()) {
+            Log.i(TAG, "Saving pending navigate_to: " + route);
+            getSharedPreferences("capacitor", MODE_PRIVATE)
+                    .edit().putString("pending_navigate_to", route).apply();
+            intent.removeExtra("navigate_to");
+            intent.removeExtra("route");
+        }
     }
 }

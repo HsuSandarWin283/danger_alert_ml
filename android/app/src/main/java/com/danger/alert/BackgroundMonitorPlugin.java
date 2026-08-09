@@ -512,4 +512,17 @@ public class BackgroundMonitorPlugin extends Plugin {
             call.reject("Exception: " + e.getMessage());
         }
     }
+
+    @PluginMethod
+    public void getPendingNavigate(PluginCall call) {
+        android.content.SharedPreferences prefs = getContext().getSharedPreferences("capacitor", android.content.Context.MODE_PRIVATE);
+        String route = prefs.getString("pending_navigate_to", "");
+        if (route != null && !route.isEmpty()) {
+            prefs.edit().remove("pending_navigate_to").apply();
+            Log.i(TAG, "getPendingNavigate: " + route);
+        }
+        JSObject result = new JSObject();
+        result.put("route", route != null ? route : "");
+        call.resolve(result);
+    }
 }
