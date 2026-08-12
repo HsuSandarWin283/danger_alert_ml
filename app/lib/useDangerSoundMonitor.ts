@@ -44,7 +44,7 @@ const CHUNK_MS = 5000;
 const RMS_CHECK_MS = 200;
 const SCRIPT_PROCESSOR_BUFFER_SIZE = 4096;
 const RMS_THRESHOLD = 0.003;
-const CONFIDENCE_THRESHOLD = 0.6;
+const CONFIDENCE_THRESHOLD = 0.8;
 const DUPLICATE_ALERT_MS = 10000;
 const DANGER_LABELS = new Set(['accident', 'gunshot', 'scream', 'glass_break']);
 
@@ -215,21 +215,44 @@ export function useDangerSoundMonitor(
 
     pendingSamplesRef.current = [];
     isPredictingRef.current = false;
+
+    if (Capacitor.isNativePlatform()) {
+ BackgroundMonitor.stopMonitoring().catch(() => {});
+    }
   }, []);
 
   useEffect(() => {
     mountedRef.current = true;
 
-    const wasMonitoring = localStorage.getItem(MONITORING_KEY) === 'true';
-    if (wasMonitoring) {
-      setTimeout(() => {
-        startMonitoring();
-      }, 1000);
-    }
+    const checkNativeState = async () => {
+      if (Capacitor.isNativePlatform()) {
+        try {
+          const { running } = await BackgroundMonitor.isRunning();
+          if (running) {
+            setIsMonitoring(true);
+            setIsRecording(true);
+            localStorage.setItem(MONITORING_KEY, 'true');
+            return;
+          }
+          localStorage.removeItem(MONITORING_KEY);
+        } catch {}
+      }
+
+      const wasMonitoring = localStorage.getItem(MONITORING_KEY) === 'true';
+      if (wasMonitoring) {
+        setTimeout(() => {
+          startMonitoring();
+        }, 1000);
+      }
+    };
+
+    checkNativeState();
 
     return () => {
       mountedRef.current = false;
-      stopMonitoring();
+      if (!Capacitor.isNativePlatform()) {
+        stopMonitoring();
+      }
     };
   }, [stopMonitoring]);
 
@@ -272,18 +295,71 @@ export function useDangerSoundMonitor(
       }
     };
     fetchMembers();
-
-    return () => {
-      BackgroundMonitor.stopMonitoring().catch(() => {});
-    };
   }, [isMonitoring]);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+
+    let prev: boolean | null = null;
+
+    const check = async () => {
+      try {
+        const { running } = await BackgroundMonitor.isRunning();
+        if (prev === running) return;
+        prev = running;
+
+        setIsMonitoring(running);
+        setIsRecording(running);
+        if (running) {
+          localStorage.setItem(MONITORING_KEY, 'true');
+        } else {
+          localStorage.removeItem(MONITORING_KEY);
+        }
+      } catch {}
+    };
+
+    check();
+    const poll = setInterval(check, 2000);
+
+    return () => clearInterval(poll);
+  }, []);
 
   const startMonitoring = useCallback(async () => {
     setError(null);
-    stopMonitoring();
+
+    if (Capacitor.isNativePlatform()) {
+      setIsMonitoring(true);
+      setIsRecording(true);
+      localStorage.setItem(MONITORING_KEY, 'true');
+    }
+
+    if (intervalRef.current !== null) {
+      window.clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    if (rmsIntervalRef.current !== null) {
+      window.clearInterval(rmsIntervalRef.current);
+      rmsIntervalRef.current = null;
+    }
+    try {
+      processorRef.current?.disconnect();
+      sourceRef.current?.disconnect();
+      analyserRef.current?.disconnect();
+      silentGainRef.current?.disconnect();
+    } catch {}
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    const prevCtx = audioContextRef.current;
+    audioContextRef.current = null;
+    if (prevCtx && prevCtx.state !== 'closed') {
+      prevCtx.close().catch(() => {});
+    }
+    pendingSamplesRef.current = [];
 
     if (!window.navigator?.mediaDevices?.getUserMedia) {
-      setError('Microphone API is not available in this browser.');
+      if (!Capacitor.isNativePlatform()) {
+        setError('Microphone API is not available in this browser.');
+      }
       return;
     }
 

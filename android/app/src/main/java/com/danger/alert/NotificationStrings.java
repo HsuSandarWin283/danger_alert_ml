@@ -154,4 +154,19 @@ public class NotificationStrings {
     public String failed(String reason) {
         return isMy() ? "မအောင်မြင်ပါ: " + reason : "Failed: " + reason;
     }
+
+    public String helpAlertDefaultTitle() {
+        return isMy() ? "အကူအညီတောင်းခံချက်" : "Help Request";
+    }
+
+    public String helpAlertDefaultBody() {
+        return isMy() ? "တစ်စုံတစ်ယောက် အကူအညီလိုအပ်နေသည်!" : "Someone needs your help!";
+    }
+
+    public String helpAlertTitle(String senderName) {
+        if (isMy()) {
+            return senderName + " အကူအညီလိုအပ်နေသည်!";
+        }
+        return senderName + " needs help!";
+    }
 }

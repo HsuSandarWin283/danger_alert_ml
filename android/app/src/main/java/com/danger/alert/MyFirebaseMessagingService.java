@@ -50,13 +50,17 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
         updates.put("fcmToken", token);
 
         db.collection("users").document(userId)
-                .update(updates)
+                .set(updates, com.google.firebase.firestore.SetOptions.merge())
                 .addOnSuccessListener(aVoid -> Log.i(TAG, "FCM token saved to Firestore for user: " + userId))
                 .addOnFailureListener(e -> Log.e(TAG, "Failed to save FCM token", e));
     }
 
     private static String getActiveUserId() {
-        return null;
+        android.content.SharedPreferences prefs = com.google.firebase.FirebaseApp.getInstance()
+                .getApplicationContext()
+                .getSharedPreferences("capacitor", android.content.Context.MODE_PRIVATE);
+        String userId = prefs.getString("current_user_id", "");
+        return (userId != null && !userId.isEmpty()) ? userId : null;
     }
 
     @Override
@@ -69,32 +73,36 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
     @Override
     public void onMessageReceived(@NonNull RemoteMessage message) {
         super.onMessageReceived(message);
-        Log.i(TAG, "Push notification received: " + message.getNotification());
-
-        String title = "";
-        String body = "";
-        if (message.getNotification() != null) {
-            title = message.getNotification().getTitle() != null ? message.getNotification().getTitle() : "";
-            body = message.getNotification().getBody() != null ? message.getNotification().getBody() : "";
-        }
+        Log.i(TAG, "Push received: " + message.getData());
 
         Map<String, String> data = message.getData();
         String type = data.get("type");
 
         if ("help_message".equals(type)) {
-            showHelpNotification(title, body);
+            String title = data.get("title");
+            String body = data.get("body");
+            NotificationStrings ns = new NotificationStrings(this);
+            showHelpFullScreen(
+                    title != null ? title : ns.helpAlertDefaultTitle(),
+                    body != null ? body : ns.helpAlertDefaultBody());
         }
     }
 
-    private void showHelpNotification(String title, String body) {
+    private void showHelpFullScreen(String title, String body) {
         createHelpChannel();
 
-        Intent intent = new Intent(this, MainActivity.class);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        intent.putExtra("navigate_to", "/help-history");
+        Intent alertIntent = new Intent(this, HelpAlertActivity.class);
+        alertIntent.putExtra("title", title);
+        alertIntent.putExtra("body", body);
+        alertIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
 
-        PendingIntent pendingIntent = PendingIntent.getActivity(
-                this, 0, intent,
+        PendingIntent fullScreenPending = PendingIntent.getActivity(
+                this, 1, alertIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE
+        );
+
+        PendingIntent contentPending = PendingIntent.getActivity(
+                this, 1, alertIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
 
@@ -103,16 +111,24 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
                 .setContentTitle(title)
                 .setContentText(body)
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-                .setContentIntent(pendingIntent)
+                .setPriority(NotificationCompat.PRIORITY_MAX)
+                .setCategory(NotificationCompat.CATEGORY_ALARM)
+                .setFullScreenIntent(fullScreenPending, true)
+                .setContentIntent(contentPending)
                 .setAutoCancel(true)
                 .setVibrate(new long[]{0, 500, 200, 500})
-                .setLights(Color.RED, 500, 500);
+                .setLights(Color.RED, 500, 500)
+                .setDefaults(android.app.Notification.DEFAULT_VIBRATE | android.app.Notification.DEFAULT_SOUND);
 
         try {
             NotificationManagerCompat.from(this).notify(HELP_NOTIFICATION_ID, builder.build());
-            Log.i(TAG, "Help notification displayed");
+            Log.i(TAG, "Help full-screen notification displayed");
+
+            try {
+                startActivity(alertIntent);
+            } catch (Exception e) {
+                Log.w(TAG, "Cannot start HelpAlertActivity from background", e);
+            }
         } catch (Exception e) {
             Log.e(TAG, "Failed to show help notification", e);
         }

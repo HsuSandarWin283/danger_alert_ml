@@ -1,11 +1,13 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { useRouter } from "next/navigation"
 
 const THRESHOLD = 80
 const MAX_PULL = 120
 
 export default function PullToRefresh({ children }: { children: React.ReactNode }) {
+  const router = useRouter()
   const [pullDistance, setPullDistance] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
   const startY = useRef(0)
@@ -34,7 +36,9 @@ export default function PullToRefresh({ children }: { children: React.ReactNode 
       if (pullDistance >= THRESHOLD && !refreshing) {
         setRefreshing(true)
         setTimeout(() => {
-          window.location.reload()
+          router.refresh()
+          setRefreshing(false)
+          setPullDistance(0)
         }, 500)
       } else {
         setPullDistance(0)
@@ -50,7 +54,7 @@ export default function PullToRefresh({ children }: { children: React.ReactNode 
       document.removeEventListener("touchmove", onTouchMove)
       document.removeEventListener("touchend", onTouchEnd)
     }
-  }, [pullDistance, refreshing])
+  }, [pullDistance, refreshing, router])
 
   const progress = Math.min(pullDistance / THRESHOLD, 1)
   const rotation = progress * 360

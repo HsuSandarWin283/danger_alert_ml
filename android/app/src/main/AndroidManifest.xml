@@ -34,6 +34,15 @@
             android:showWhenLocked="true"
             android:turnScreenOn="true" />
 
+        <activity
+            android:name=".HelpAlertActivity"
+            android:exported="false"
+            android:theme="@style/DangerAlertTheme"
+            android:launchMode="singleInstance"
+            android:showOnLockScreen="true"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true" />
+
         <service
             android:name=".MonitoringService"
             android:exported="false"

@@ -1,4 +1,4 @@
-import { registerPlugin } from '@capacitor/core';
+import { registerPlugin, PluginListenerHandle } from '@capacitor/core';
 
 export interface BackgroundMonitorPlugin {
   startMonitoring(options: { apiUrl: string }): Promise<{ running: boolean }>;
@@ -11,6 +11,7 @@ export interface BackgroundMonitorPlugin {
   fetchFcmToken(options: { userId: string }): Promise<{ fcmToken: string }>;
   setLanguage(options: { lang: string }): Promise<{ saved: boolean }>;
   getPendingNavigate(): Promise<{ route: string }>;
+  addListener(eventName: 'monitoringStateChanged', listenerFunc: (data: { running: boolean }) => void): Promise<PluginListenerHandle>;
 }
 
 const BackgroundMonitor = registerPlugin<BackgroundMonitorPlugin>('BackgroundMonitor');

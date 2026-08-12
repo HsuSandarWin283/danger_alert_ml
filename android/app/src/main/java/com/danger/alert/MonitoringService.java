@@ -13,7 +13,9 @@ import android.media.AudioFormat;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
 import android.os.Build;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.util.Log;
 
 import androidx.core.app.ActivityCompat;
@@ -32,7 +34,9 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.json.JSONObject;
 
@@ -45,12 +49,16 @@ public class MonitoringService extends Service {
     private static final int SAMPLE_RATE = 22050;
     private static final int DURATION_SECONDS = 5;
     private static final String DEFAULT_API_URL = "https://danger-alert-ml.onrender.com";
+    private static final long KEEPALIVE_INTERVAL_MS = 4 * 60 * 1000;
 
     private AudioRecord audioRecord;
     private AtomicBoolean isRecording = new AtomicBoolean(false);
     private ExecutorService executor;
+    private ExecutorService apiExecutor;
     private String apiUrl;
     private int bufferSize;
+    private Handler keepaliveHandler;
+    private AtomicInteger pendingApiCalls = new AtomicInteger(0);
 
     public static final String ACTION_START = "com.danger.alert.START_MONITORING";
     public static final String ACTION_STOP = "com.danger.alert.STOP_MONITORING";
@@ -60,6 +68,8 @@ public class MonitoringService extends Service {
     public void onCreate() {
         super.onCreate();
         executor = Executors.newSingleThreadExecutor();
+        apiExecutor = Executors.newFixedThreadPool(2);
+        keepaliveHandler = new Handler(Looper.getMainLooper());
         createNotificationChannel();
     }
 
@@ -199,11 +209,38 @@ public class MonitoringService extends Service {
 
         isRecording.set(true);
         audioRecord.startRecording();
+        getSharedPreferences("capacitor", MODE_PRIVATE)
+                .edit().putBoolean("monitoring_running", true).apply();
+        BackgroundMonitorPlugin.notifyStateChange(true);
         Log.i(TAG, "Monitoring started");
         NotificationStrings ns2 = new NotificationStrings(this);
         updateNotification(ns2.listeningForDangerSounds());
 
         executor.execute(this::recordingLoop);
+        startKeepAlive();
+    }
+
+    private void startKeepAlive() {
+        keepaliveHandler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                if (!isRecording.get()) return;
+                apiExecutor.execute(() -> {
+                    try {
+                        HttpURLConnection c = (HttpURLConnection) new URL(apiUrl + "/health").openConnection();
+                        c.setRequestMethod("GET");
+                        c.setConnectTimeout(5000);
+                        c.setReadTimeout(5000);
+                        c.getResponseCode();
+                        c.disconnect();
+                        Log.d(TAG, "Keep-alive ping OK");
+                    } catch (Exception e) {
+                        Log.w(TAG, "Keep-alive ping failed", e);
+                    }
+                });
+                keepaliveHandler.postDelayed(this, KEEPALIVE_INTERVAL_MS);
+            }
+        }, KEEPALIVE_INTERVAL_MS);
     }
 
     private void recordingLoop() {
@@ -231,15 +268,32 @@ public class MonitoringService extends Service {
                 continue;
             }
 
-            try {
-                byte[] wavData = createWav(audioBuffer, totalRead, SAMPLE_RATE);
-                String result = sendToApi(wavData);
-                if (result != null) {
-                    handleResult(result, rms);
-                }
-            } catch (Exception e) {
-                Log.e(TAG, "Error processing audio chunk", e);
+            if (pendingApiCalls.get() >= 2) {
+                Log.w(TAG, "Skipping chunk, " + pendingApiCalls.get() + " API calls pending");
+                continue;
             }
+
+            final short[] chunkCopy = new short[totalRead];
+            System.arraycopy(audioBuffer, 0, chunkCopy, 0, totalRead);
+            final double chunkRms = rms;
+
+            pendingApiCalls.incrementAndGet();
+            apiExecutor.execute(() -> {
+                try {
+                    byte[] wavData = createWav(chunkCopy, chunkCopy.length, SAMPLE_RATE);
+                    long t0 = System.currentTimeMillis();
+                    String result = sendToApi(wavData);
+                    long elapsed = System.currentTimeMillis() - t0;
+                    Log.d(TAG, "API call took " + elapsed + "ms");
+                    if (result != null) {
+                        handleResult(result, chunkRms);
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Error processing audio chunk", e);
+                } finally {
+                    pendingApiCalls.decrementAndGet();
+                }
+            });
         }
     }
 
@@ -293,8 +347,8 @@ public class MonitoringService extends Service {
             conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
             conn.setDoOutput(true);
-            conn.setConnectTimeout(15000);
-            conn.setReadTimeout(15000);
+            conn.setConnectTimeout(8000);
+            conn.setReadTimeout(10000);
             conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
 
             DataOutputStream dos = new DataOutputStream(conn.getOutputStream());
@@ -327,7 +381,7 @@ public class MonitoringService extends Service {
             String prediction = obj.optString("prediction", "unknown");
             double confidence = obj.optDouble("confidence", 0);
 
-            if (!prediction.equals("normal") && confidence >= 0.6) {
+            if (!prediction.equals("normal") && confidence >= 0.8) {
                 Log.i(TAG, "Danger detected: " + prediction + " (" + confidence + ")");
 
                 Intent alertIntent = new Intent(this, DangerAlertActivity.class);
@@ -376,6 +430,10 @@ public class MonitoringService extends Service {
 
     private void stopMonitoring() {
         isRecording.set(false);
+        keepaliveHandler.removeCallbacksAndMessages(null);
+        getSharedPreferences("capacitor", MODE_PRIVATE)
+                .edit().putBoolean("monitoring_running", false).apply();
+        BackgroundMonitorPlugin.notifyStateChange(false);
         if (audioRecord != null) {
             try {
                 audioRecord.stop();
@@ -393,6 +451,9 @@ public class MonitoringService extends Service {
         stopMonitoring();
         if (executor != null) {
             executor.shutdownNow();
+        }
+        if (apiExecutor != null) {
+            apiExecutor.shutdownNow();
         }
         super.onDestroy();
     }

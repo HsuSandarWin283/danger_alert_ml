@@ -96,22 +96,24 @@ class FcmHelper {
     }
 
     static void sendPush(String accessToken, String fcmToken, String title, String body) throws Exception {
+        sendPush(accessToken, fcmToken, title, body, null);
+    }
+
+    static void sendPush(String accessToken, String fcmToken, String title, String body, String senderName) throws Exception {
         String projectId = "danger-alert-903e5";
         fcmToken = fcmToken.trim().replaceAll("\\s+", "");
+        String displayTitle = (senderName != null && !senderName.isEmpty()) ? senderName + " needs help!" : title;
         String jsonBody = "{"
                 + "\"message\":{"
                 + "\"token\":\"" + fcmToken + "\","
-                + "\"notification\":{"
-                + "\"title\":\"" + escapeJson(title) + "\","
-                + "\"body\":\"" + escapeJson(body) + "\""
-                + "},"
                 + "\"data\":{"
                 + "\"type\":\"help_message\","
-                + "\"route\":\"/help-history\""
+                + "\"route\":\"/help-alert\","
+                + "\"title\":\"" + escapeJson(displayTitle) + "\","
+                + "\"body\":\"" + escapeJson(body) + "\""
                 + "},"
                 + "\"android\":{"
-                + "\"priority\":\"high\","
-                + "\"notification\":{\"channel_id\":\"danger_alert\"}"
+                + "\"priority\":\"high\""
                 + "}"
                 + "}"
                 + "}";

@@ -40,6 +40,21 @@ import com.google.android.gms.location.LocationServices;
 public class BackgroundMonitorPlugin extends Plugin {
 
     private static final String TAG = "BackgroundMonitor";
+    private static BackgroundMonitorPlugin instance;
+
+    @Override
+    public void load() {
+        instance = this;
+    }
+
+    public static void notifyStateChange(boolean running) {
+        if (instance != null) {
+            JSObject data = new JSObject();
+            data.put("running", running);
+            instance.notifyListeners("monitoringStateChanged", data);
+            Log.i(TAG, "Notified JS: monitoringStateChanged running=" + running);
+        }
+    }
 
     @PluginMethod
     public void startMonitoring(PluginCall call) {
@@ -323,7 +338,7 @@ public class BackgroundMonitorPlugin extends Plugin {
             }
             for (String token : memberTokens) {
                 try {
-                    FcmHelper.sendPush(accessToken, token, nsEmergency.pushTitle(dangerType), notificationBody);
+                    FcmHelper.sendPush(accessToken, token, nsEmergency.pushTitle(dangerType), notificationBody, userName);
                     sent++;
                 } catch (Exception e) {
                     Log.w(TAG, "FCM failed for token " + token, e);
@@ -443,8 +458,10 @@ public class BackgroundMonitorPlugin extends Plugin {
 
     @PluginMethod
     public void isRunning(PluginCall call) {
+        boolean running = getContext().getSharedPreferences("capacitor", android.content.Context.MODE_PRIVATE)
+                .getBoolean("monitoring_running", false);
         JSObject result = new JSObject();
-        result.put("running", true);
+        result.put("running", running);
         call.resolve(result);
     }
 
