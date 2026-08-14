@@ -39,6 +39,13 @@ export const translations: Record<Lang, Record<string, string>> = {
     sending: 'Sending...',
     sendSuccess: 'Send success',
     sendFailed: 'send failed',
+    areYouOk: 'Are you OK?',
+    detectSound: 'Detect Sound',
+    dangerSoundFoundNear: 'Danger Sound found near around you?',
+    imOk: 'I\'m OK',
+    imNotOkSendHelp: 'I\'m NOT OK - Send Help',
+    helpSentSuccess: 'Help request sent to your trusted group',
+    helpSentFailed: 'Failed to send help request',
 
     // MicrophoneMonitor
     micMonitorTitle: 'Microphone Monitor',
@@ -169,6 +176,13 @@ export const translations: Record<Lang, Record<string, string>> = {
     sending: 'ပို့နေသည်...',
     sendSuccess: 'ပို့ဆောင်ပြီးပါပြီ',
     sendFailed: 'ပို့ဆောင်ခြင်းမအောင်မြင်ပါ',
+    areYouOk: 'သင် ဘေးကင်းပါသလား?',
+    detectSound: 'အန္တရာယ်ရှိသည့်အသံ ရှာဖွေတွေ့ရှိပါပြီ',
+    dangerSoundFoundNear: 'သင့်အနားနားတွင်အန္တရာယ်ရှိသည့်အသံတွေ့ရှိပါပြီ',
+    imOk: 'ကျွန်တော်/ကျွန်မ ဘေးကင်းပါတယ်',
+    imNotOkSendHelp: 'ကျွန်တော်/ကျွန်မ ဘေးမကင်ပါ - အကူအညီပို့ပါ',
+    helpSentSuccess: 'ယုံကြည်ရသူများအုပ်စုသို့ အကူအညီတောင်းချက် ပို့ပြီးပါပြီ',
+    helpSentFailed: 'အကူအညီတောင်းချက် ပို့ဆောင်ခြင်းမအောင်မြင်ပါ',
 
     // MicrophoneMonitor
     micMonitorTitle: 'မိုက်ခရိုဖုန်း စောင့်ကြည့်ရေး',

@@ -3,7 +3,7 @@ import { AuthProvider } from "./auth-provider";
 import { MicrophoneProvider } from "./lib/MicrophoneProvider";
 import { LanguageProvider } from "./lib/LanguageProvider";
 import PullToRefresh from "./components/PullToRefresh";
-import PendingNavigate from "./components/PendingNavigate";
+import RoutePersistence from "./components/RoutePersistence";
 
 export const metadata = {
   title: "AI Personal Safety Companion",
@@ -22,7 +22,7 @@ export default function RootLayout({
         <LanguageProvider>
           <AuthProvider>
             <MicrophoneProvider>
-              <PendingNavigate />
+              <RoutePersistence />
               <PullToRefresh>{children}</PullToRefresh>
             </MicrophoneProvider>
           </AuthProvider>

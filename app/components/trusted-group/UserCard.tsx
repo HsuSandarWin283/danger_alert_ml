@@ -25,6 +25,9 @@ export default function UserCard({ user, onAdd, adding }: UserCardProps) {
       <div className="flex-1 min-w-0">
         <h3 className="font-semibold text-gray-800 truncate">{user.name || t('unnamedUser')}</h3>
         <p className="text-sm text-gray-500 truncate">{user.email}</p>
+        {user.phone && (
+          <p className="text-sm text-gray-500 truncate">{user.phone}</p>
+        )}
       </div>
       {user.isMember ? (
         <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium">

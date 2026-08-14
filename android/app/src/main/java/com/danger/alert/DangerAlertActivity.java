@@ -24,6 +24,7 @@ import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -62,10 +63,17 @@ public class DangerAlertActivity extends AppCompatActivity {
 
         getWindow().addFlags(
                 WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON |
-                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON |
-                WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD |
-                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
+                        WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON |
+                        WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD |
+                        WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED |
+                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN |
+                        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
         );
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true);
+            setTurnScreenOn(true);
+        }
 
         PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
         PowerManager.WakeLock wakeLock = pm.newWakeLock(
@@ -88,8 +96,75 @@ public class DangerAlertActivity extends AppCompatActivity {
             onSendHelp();
             return;
         }
+        if ("trouble".equals(action)) {
+            String senderName = getIntent().getStringExtra("senderName");
+            String alertMsg = getIntent().getStringExtra("alertMsg");
+            buildTroubleUI(senderName, alertMsg);
+            return;
+        }
 
         buildUI();
+    }
+
+    private void buildTroubleUI(String senderName, String alertMsg) {
+        rootLayout = new LinearLayout(this);
+        rootLayout.setOrientation(LinearLayout.VERTICAL);
+        rootLayout.setGravity(Gravity.CENTER_HORIZONTAL);
+        rootLayout.setPadding(80, 120, 80, 80);
+        rootLayout.setBackgroundColor(Color.parseColor("#DC2626"));
+
+        TextView icon = new TextView(this);
+        icon.setText("\u26A0\uFE0F");
+        icon.setTextSize(60);
+        icon.setGravity(Gravity.CENTER);
+        rootLayout.addView(icon);
+
+        TextView titleView = new TextView(this);
+        titleView.setText("Danger : TROUBLE");
+        titleView.setTextColor(Color.WHITE);
+        titleView.setTextSize(28);
+        titleView.setGravity(Gravity.CENTER);
+        titleView.setPadding(0, 30, 0, 10);
+        rootLayout.addView(titleView);
+
+        String name = senderName != null && !senderName.isEmpty() ? senderName : "User";
+        TextView troubleView = new TextView(this);
+        troubleView.setText(name + " is trouble now");
+        troubleView.setTextColor(Color.parseColor("#FCA5A5"));
+        troubleView.setTextSize(22);
+        troubleView.setGravity(Gravity.CENTER);
+        troubleView.setPadding(0, 10, 0, 20);
+        rootLayout.addView(troubleView);
+
+        TextView msgView = new TextView(this);
+        msgView.setText(alertMsg != null ? alertMsg : "");
+        msgView.setTextColor(Color.WHITE);
+        msgView.setTextSize(18);
+        msgView.setGravity(Gravity.CENTER);
+        msgView.setPadding(0, 10, 0, 40);
+        rootLayout.addView(msgView);
+
+        Button closeBtn = new Button(this);
+        NotificationStrings ns = new NotificationStrings(this);
+        closeBtn.setText(ns.close());
+        closeBtn.setTextSize(20);
+        closeBtn.setBackgroundColor(Color.WHITE);
+        closeBtn.setTextColor(Color.parseColor("#DC2626"));
+        LinearLayout.LayoutParams closeLP = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 160);
+        closeBtn.setLayoutParams(closeLP);
+        closeBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                finish();
+            }
+        });
+        rootLayout.addView(closeBtn);
+
+        ScrollView scrollView = new ScrollView(this);
+        scrollView.setFillViewport(true);
+        scrollView.addView(rootLayout);
+        setContentView(scrollView);
     }
 
     private void buildUI() {
@@ -108,7 +183,7 @@ public class DangerAlertActivity extends AppCompatActivity {
         NotificationStrings ns = new NotificationStrings(this);
 
         TextView title = new TextView(this);
-        title.setText(ns.dangerDetectedScreenTitle());
+        title.setText(ns.dangerTypeTitle(dangerType));
         title.setTextColor(Color.WHITE);
         title.setTextSize(28);
         title.setGravity(Gravity.CENTER);
@@ -116,19 +191,12 @@ public class DangerAlertActivity extends AppCompatActivity {
         rootLayout.addView(title);
 
         TextView message = new TextView(this);
-        message.setText(ns.dangerFoundMessage(dangerType));
+        message.setText(ns.dangerSoundFoundNear() + "\n" + ns.areYouOk());
         message.setTextColor(Color.WHITE);
         message.setTextSize(20);
         message.setGravity(Gravity.CENTER);
-        message.setPadding(0, 10, 0, 10);
+        message.setPadding(0, 10, 0, 40);
         rootLayout.addView(message);
-
-        final TextView timerView = new TextView(this);
-        timerView.setTextColor(Color.parseColor("#FCA5A5"));
-        timerView.setTextSize(16);
-        timerView.setGravity(Gravity.CENTER);
-        timerView.setPadding(0, 10, 0, 40);
-        rootLayout.addView(timerView);
 
         Button okBtn = new Button(this);
         okBtn.setText(ns.imOk());
@@ -164,22 +232,10 @@ public class DangerAlertActivity extends AppCompatActivity {
         });
         rootLayout.addView(helpBtn);
 
-        setContentView(rootLayout);
-
-        timer = new CountDownTimer(120000, 1000) {
-            @Override
-            public void onTick(long millisUntilFinished) {
-                long mins = millisUntilFinished / 60000;
-                long secs = (millisUntilFinished % 60000) / 1000;
-                NotificationStrings nsTick = new NotificationStrings(DangerAlertActivity.this);
-                timerView.setText(nsTick.autoSendHelp(mins, secs));
-            }
-
-            @Override
-            public void onFinish() {
-                onSendHelp();
-            }
-        }.start();
+        ScrollView scrollView = new ScrollView(this);
+        scrollView.setFillViewport(true);
+        scrollView.addView(rootLayout);
+        setContentView(scrollView);
     }
 
     private void onSendHelp() {
@@ -389,7 +445,7 @@ public class DangerAlertActivity extends AppCompatActivity {
                                 fcmToken = fcmToken.trim().replaceAll("\\s+", "");
                                 try {
                                     FcmHelper.sendPush(fcmAccessToken, fcmToken,
-                                            ns.pushTitle(dangerType), alertMsg);
+                                            ns.pushTitle(dangerType), alertMsg, userName, dangerType, locationName);
                                     fcmSent++;
                                 } catch (Exception fcmErr) {
                                     fcmFailed++;

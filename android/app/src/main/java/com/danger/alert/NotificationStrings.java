@@ -77,6 +77,20 @@ public class NotificationStrings {
         return "I found " + type.toUpperCase() + " sound near you.\nAre you OK?";
     }
 
+    public String dangerTypeTitle(String type) {
+        if (isMy()) {
+            return "အန္တရာယ်: " + type.toUpperCase();
+        }
+        return "Danger : " + type.toUpperCase();
+    }
+
+    public String dangerSoundFoundNear() {
+        if (isMy()) {
+            return "သင့်အနားနားတွင် အန္တရာယ်ရှိသည့်အသံတွေ့ရှိပါပြီ";
+        }
+        return "Danger Sound found near around you?";
+    }
+
     public String autoSendHelp(long mins, long secs) {
         if (isMy()) {
             return String.format("အလိုအလျောက် အကူအညီပို့ခြင်း %02d:%02d", mins, secs);

@@ -2,6 +2,7 @@
 
 import { useMicrophoneContext } from "@/app/lib/MicrophoneProvider"
 import { useLang } from "@/app/lib/LanguageProvider"
+import { Capacitor } from "@capacitor/core"
 
 export default function MicrophoneMonitor() {
   const { isRecording, recordingTime, permissionState, rmsLevel, lastPrediction, startRecording, stopRecording, error } = useMicrophoneContext()
@@ -55,10 +56,12 @@ export default function MicrophoneMonitor() {
           )}
 
           <div className="grid grid-cols-2 gap-4 mb-4">
-            <div className="bg-gray-50 rounded-xl p-4">
-              <p className="text-sm text-gray-500">{t('rmsLevel')}</p>
-              <p className="text-xl font-bold">{rmsLevel.toFixed(4)}</p>
-            </div>
+            {isRecording && (
+              <div className="bg-gray-50 rounded-xl p-4">
+                <p className="text-sm text-gray-500">{t('rmsLevel')}</p>
+                <p className="text-xl font-bold">{rmsLevel.toFixed(4)}</p>
+              </div>
+            )}
 
             <div className="bg-gray-50 rounded-xl p-4">
               <p className="text-sm text-gray-500">{t('lastPrediction')}</p>

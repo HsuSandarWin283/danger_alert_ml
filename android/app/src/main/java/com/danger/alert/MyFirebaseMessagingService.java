@@ -81,19 +81,32 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
         if ("help_message".equals(type)) {
             String title = data.get("title");
             String body = data.get("body");
+            String senderName = data.get("senderName");
+            String dangerType = data.get("dangerType");
+            String locationName = data.get("locationName");
+            String alertMsg = data.get("alertMsg");
             NotificationStrings ns = new NotificationStrings(this);
             showHelpFullScreen(
                     title != null ? title : ns.helpAlertDefaultTitle(),
-                    body != null ? body : ns.helpAlertDefaultBody());
+                    body != null ? body : ns.helpAlertDefaultBody(),
+                    senderName != null ? senderName : "",
+                    dangerType != null ? dangerType : "unknown",
+                    locationName != null ? locationName : "",
+                    alertMsg != null ? alertMsg : "");
         }
     }
 
-    private void showHelpFullScreen(String title, String body) {
+    private void showHelpFullScreen(String title, String body, String senderName, String dangerType, String locationName, String alertMsg) {
         createHelpChannel();
 
         Intent alertIntent = new Intent(this, HelpAlertActivity.class);
         alertIntent.putExtra("title", title);
         alertIntent.putExtra("body", body);
+        alertIntent.putExtra("senderName", senderName);
+        alertIntent.putExtra("dangerType", dangerType);
+        alertIntent.putExtra("locationName", locationName);
+        alertIntent.putExtra("alertMsg", alertMsg != null ? alertMsg : body);
+        alertIntent.putExtra("action", "received");
         alertIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
 
         PendingIntent fullScreenPending = PendingIntent.getActivity(

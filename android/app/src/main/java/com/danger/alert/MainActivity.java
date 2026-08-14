@@ -35,6 +35,8 @@ public class MainActivity extends BridgeActivity {
 
         createNotificationChannels();
         handleNavigationIntent(getIntent());
+        getSharedPreferences("capacitor", MODE_PRIVATE)
+                .edit().remove("pending_navigate_to").apply();
 
         java.util.List<String> perms = new java.util.ArrayList<>();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

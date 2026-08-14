@@ -25,6 +25,9 @@ export default function MemberCard({ member, onRemove, removing }: MemberCardPro
       <div className="flex-1 min-w-0">
         <h3 className="font-semibold text-gray-800 truncate">{member.name || t('unnamedUser')}</h3>
         <p className="text-sm text-gray-500 truncate">{member.email}</p>
+        {member.phone && (
+          <p className="text-sm text-gray-500 truncate">{member.phone}</p>
+        )}
         <p className="text-xs text-gray-400 mt-1">
           {t('joined')} {new Date(member.joinedAt).toLocaleDateString()}
         </p>

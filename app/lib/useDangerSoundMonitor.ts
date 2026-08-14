@@ -232,6 +232,7 @@ export function useDangerSoundMonitor(
             setIsMonitoring(true);
             setIsRecording(true);
             localStorage.setItem(MONITORING_KEY, 'true');
+            await startMonitoring();
             return;
           }
           localStorage.removeItem(MONITORING_KEY);

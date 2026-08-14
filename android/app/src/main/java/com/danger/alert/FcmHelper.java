@@ -96,13 +96,18 @@ class FcmHelper {
     }
 
     static void sendPush(String accessToken, String fcmToken, String title, String body) throws Exception {
-        sendPush(accessToken, fcmToken, title, body, null);
+        sendPush(accessToken, fcmToken, title, body, null, null, null, null);
     }
 
-    static void sendPush(String accessToken, String fcmToken, String title, String body, String senderName) throws Exception {
+    static void sendPush(String accessToken, String fcmToken, String title, String body, String senderName, String dangerType, String locationName) throws Exception {
+        sendPush(accessToken, fcmToken, title, body, senderName, dangerType, locationName, null);
+    }
+
+    static void sendPush(String accessToken, String fcmToken, String title, String body, String senderName, String dangerType, String locationName, String alertMsg) throws Exception {
         String projectId = "danger-alert-903e5";
         fcmToken = fcmToken.trim().replaceAll("\\s+", "");
         String displayTitle = (senderName != null && !senderName.isEmpty()) ? senderName + " needs help!" : title;
+        String effectiveAlertMsg = (alertMsg != null && !alertMsg.isEmpty()) ? alertMsg : body;
         String jsonBody = "{"
                 + "\"message\":{"
                 + "\"token\":\"" + fcmToken + "\","
@@ -110,7 +115,11 @@ class FcmHelper {
                 + "\"type\":\"help_message\","
                 + "\"route\":\"/help-alert\","
                 + "\"title\":\"" + escapeJson(displayTitle) + "\","
-                + "\"body\":\"" + escapeJson(body) + "\""
+                + "\"body\":\"" + escapeJson(body) + "\","
+                + "\"senderName\":\"" + escapeJson(senderName != null ? senderName : "") + "\","
+                + "\"dangerType\":\"" + escapeJson(dangerType != null ? dangerType : "unknown") + "\","
+                + "\"locationName\":\"" + escapeJson(locationName != null ? locationName : "") + "\","
+                + "\"alertMsg\":\"" + escapeJson(effectiveAlertMsg) + "\""
                 + "},"
                 + "\"android\":{"
                 + "\"priority\":\"high\""

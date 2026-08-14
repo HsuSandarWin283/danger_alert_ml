@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
+import { Capacitor } from "@capacitor/core"
 
 const THRESHOLD = 80
 const MAX_PULL = 120
@@ -10,51 +11,93 @@ export default function PullToRefresh({ children }: { children: React.ReactNode 
   const router = useRouter()
   const [pullDistance, setPullDistance] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
+  const [isPulling, setIsPulling] = useState(false)
   const startY = useRef(0)
-  const pulling = useRef(false)
+
+  const doRefresh = () => {
+    if (Capacitor.isNativePlatform()) {
+      window.location.reload()
+    } else {
+      router.refresh()
+    }
+  }
 
   useEffect(() => {
     const onTouchStart = (e: TouchEvent) => {
       if (window.scrollY <= 0 && !refreshing) {
         startY.current = e.touches[0].clientY
-        pulling.current = true
+        setIsPulling(true)
       }
     }
 
     const onTouchMove = (e: TouchEvent) => {
-      if (!pulling.current || refreshing) return
+      if (!isPulling || refreshing) return
       const diff = e.touches[0].clientY - startY.current
+      if (diff > 0) {
+        setPullDistance(Math.min(diff, MAX_PULL))
+        e.preventDefault()
+      }
+    }
+
+    const onTouchEnd = () => {
+      if (!isPulling) return
+      setIsPulling(false)
+
+      if (pullDistance >= THRESHOLD && !refreshing) {
+        setRefreshing(true)
+        setPullDistance(0)
+        doRefresh()
+        setRefreshing(false)
+      } else {
+        setPullDistance(0)
+      }
+    }
+
+    const onMouseDown = (e: MouseEvent) => {
+      if (window.scrollY <= 0 && !refreshing) {
+        startY.current = e.clientY
+        setIsPulling(true)
+      }
+    }
+
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isPulling || refreshing) return
+      const diff = e.clientY - startY.current
       if (diff > 0) {
         setPullDistance(Math.min(diff, MAX_PULL))
       }
     }
 
-    const onTouchEnd = () => {
-      if (!pulling.current) return
-      pulling.current = false
+    const onMouseUp = () => {
+      if (!isPulling) return
+      setIsPulling(false)
 
       if (pullDistance >= THRESHOLD && !refreshing) {
         setRefreshing(true)
-        setTimeout(() => {
-          router.refresh()
-          setRefreshing(false)
-          setPullDistance(0)
-        }, 500)
+        setPullDistance(0)
+        doRefresh()
+        setRefreshing(false)
       } else {
         setPullDistance(0)
       }
     }
 
     document.addEventListener("touchstart", onTouchStart, { passive: true })
-    document.addEventListener("touchmove", onTouchMove, { passive: true })
+    document.addEventListener("touchmove", onTouchMove, { passive: false })
     document.addEventListener("touchend", onTouchEnd)
+    document.addEventListener("mousedown", onMouseDown)
+    document.addEventListener("mousemove", onMouseMove)
+    document.addEventListener("mouseup", onMouseUp)
 
     return () => {
       document.removeEventListener("touchstart", onTouchStart)
       document.removeEventListener("touchmove", onTouchMove)
       document.removeEventListener("touchend", onTouchEnd)
+      document.removeEventListener("mousedown", onMouseDown)
+      document.removeEventListener("mousemove", onMouseMove)
+      document.removeEventListener("mouseup", onMouseUp)
     }
-  }, [pullDistance, refreshing, router])
+  }, [pullDistance, refreshing, isPulling])
 
   const progress = Math.min(pullDistance / THRESHOLD, 1)
   const rotation = progress * 360
@@ -83,7 +126,7 @@ export default function PullToRefresh({ children }: { children: React.ReactNode 
       <div
         style={{
           transform: `translateY(${refreshing ? 50 : pullDistance}px)`,
-          transition: pulling.current ? "none" : "transform 0.3s ease",
+          transition: isPulling ? "none" : "transform 0.3s ease",
         }}
       >
         {children}

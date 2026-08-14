@@ -381,9 +381,10 @@ public class MonitoringService extends Service {
             String prediction = obj.optString("prediction", "unknown");
             double confidence = obj.optDouble("confidence", 0);
 
-            if (!prediction.equals("normal") && confidence >= 0.8) {
+            if (!prediction.equals("normal") && confidence >= 0.85) {
                 Log.i(TAG, "Danger detected: " + prediction + " (" + confidence + ")");
 
+                NotificationStrings ns = new NotificationStrings(this);
                 Intent alertIntent = new Intent(this, DangerAlertActivity.class);
                 alertIntent.putExtra("danger_type", prediction);
                 alertIntent.putExtra("confidence", confidence);
@@ -393,8 +394,6 @@ public class MonitoringService extends Service {
                         this, 0, alertIntent,
                         PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE
                 );
-
-                NotificationStrings ns = new NotificationStrings(this);
 
                 NotificationCompat.Builder alertBuilder = new NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
                         .setContentTitle(ns.dangerDetectedTitle(prediction))

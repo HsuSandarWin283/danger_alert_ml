@@ -333,12 +333,13 @@ public class BackgroundMonitorPlugin extends Plugin {
             String notificationBody = (userName != null && !userName.isEmpty()
                     ? nsEmergency.needsHelpWithName(userName)
                     : nsEmergency.needsHelp());
+            String effectiveAlertMsg = notificationBody;
             if (lat[0] != 0 || lng[0] != 0) {
                 notificationBody += "\n" + nsEmergency.locationLabel() + ": " + locationName[0];
             }
             for (String token : memberTokens) {
                 try {
-                    FcmHelper.sendPush(accessToken, token, nsEmergency.pushTitle(dangerType), notificationBody, userName);
+                    FcmHelper.sendPush(accessToken, token, nsEmergency.pushTitle(dangerType), notificationBody, userName, dangerType, locationName[0], effectiveAlertMsg);
                     sent++;
                 } catch (Exception e) {
                     Log.w(TAG, "FCM failed for token " + token, e);
