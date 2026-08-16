@@ -40,7 +40,7 @@ type UseDangerSoundMonitorReturn = {
 };
 
 const DEFAULT_PREDICT_URL = 'https://danger-alert-ml.onrender.com/predict';
-const CHUNK_MS = 5000;
+const CHUNK_MS = 3000;
 const RMS_CHECK_MS = 200;
 const SCRIPT_PROCESSOR_BUFFER_SIZE = 4096;
 const RMS_THRESHOLD = 0.003;
@@ -164,7 +164,7 @@ export function useDangerSoundMonitor(
   const mountedRef = useRef(false);
   const closingAudioContextsRef = useRef<WeakSet<AudioContext>>(new WeakSet());
   const startTimeRef = useRef<number>(0);
-  const WARMUP_MS = 5000;
+  const WARMUP_MS = 3000;
   const MONITORING_KEY = 'danger_monitoring_active';
 
   const stopMonitoring = useCallback(() => {
@@ -434,9 +434,9 @@ export function useDangerSoundMonitor(
           return;
         }
 
-        const targetSamples = audioContext.sampleRate * 5;
+        const targetSamples = audioContext.sampleRate * 3;
 
-        if (pendingSamplesRef.current.length < audioContext.sampleRate * 5) {
+        if (pendingSamplesRef.current.length < audioContext.sampleRate * 3) {
           return;
         }
 
@@ -508,11 +508,13 @@ export function useDangerSoundMonitor(
                   rms,
                 };
 
-                window.dispatchEvent(
-                  new CustomEvent('danger-detected', {
-                    detail: payload,
-                  }),
-                );
+                if (!Capacitor.isNativePlatform()) {
+                  window.dispatchEvent(
+                    new CustomEvent('danger-detected', {
+                      detail: payload,
+                    }),
+                  );
+                }
 
                 if (mountedRef.current) {
                   onDangerDetected?.(payload);

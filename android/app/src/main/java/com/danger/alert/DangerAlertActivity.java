@@ -8,17 +8,17 @@ import android.graphics.Color;
 import android.location.Address;
 import android.location.Geocoder;
 import android.location.Location;
+import android.media.MediaPlayer;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.PowerManager;
+import android.provider.Settings;
 import android.telephony.SmsManager;
 import android.util.Log;
-
-import org.json.JSONArray;
-import org.json.JSONObject;
 import android.view.Gravity;
 import android.view.View;
 import android.view.WindowManager;
@@ -26,6 +26,9 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
@@ -56,6 +59,14 @@ public class DangerAlertActivity extends AppCompatActivity {
     private String dangerType = "unknown";
     private double confidence = 0;
     private LinearLayout rootLayout;
+    private MediaPlayer alertPlayer;
+    private final Handler soundHandler = new Handler(Looper.getMainLooper());
+    private final Runnable stopSoundRunnable = new Runnable() {
+        @Override
+        public void run() {
+            stopAlertSound();
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -104,6 +115,7 @@ public class DangerAlertActivity extends AppCompatActivity {
         }
 
         buildUI();
+        playAlertSound();
     }
 
     private void buildTroubleUI(String senderName, String alertMsg) {
@@ -156,6 +168,7 @@ public class DangerAlertActivity extends AppCompatActivity {
         closeBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                stopAlertSound();
                 finish();
             }
         });
@@ -210,6 +223,7 @@ public class DangerAlertActivity extends AppCompatActivity {
         okBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                stopAlertSound();
                 finish();
             }
         });
@@ -227,6 +241,7 @@ public class DangerAlertActivity extends AppCompatActivity {
         helpBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                stopAlertSound();
                 onSendHelp();
             }
         });
@@ -328,6 +343,7 @@ public class DangerAlertActivity extends AppCompatActivity {
                     String userName = "Unknown User";
                     String alertMsg = "";
                     String fcmLastErr = "";
+                    String senderPhone = "";
 
                     String authToken = getSharedPreferences("capacitor", MODE_PRIVATE)
                             .getString("firebase_auth_token", "");
@@ -348,6 +364,8 @@ public class DangerAlertActivity extends AppCompatActivity {
                     if (!accessToken.isEmpty()) {
                         String displayName = getSharedPreferences("capacitor", MODE_PRIVATE)
                                 .getString("user_display_name", "");
+                        senderPhone = getSharedPreferences("capacitor", MODE_PRIVATE)
+                                .getString("current_user_phone", "");
                         if (displayName != null && !displayName.isEmpty()) {
                             userName = displayName;
                         } else {
@@ -360,6 +378,8 @@ public class DangerAlertActivity extends AppCompatActivity {
                                     if (senderFields != null) {
                                         JSONObject nameObj = senderFields.optJSONObject("name");
                                         if (nameObj != null) userName = nameObj.optString("stringValue", "Unknown User");
+                                        JSONObject phoneObj = senderFields.optJSONObject("phone");
+                                        if (phoneObj != null) senderPhone = phoneObj.optString("stringValue", "");
                                     }
                                 }
                             } catch (Exception e) {
@@ -445,7 +465,7 @@ public class DangerAlertActivity extends AppCompatActivity {
                                 fcmToken = fcmToken.trim().replaceAll("\\s+", "");
                                 try {
                                     FcmHelper.sendPush(fcmAccessToken, fcmToken,
-                                            ns.pushTitle(dangerType), alertMsg, userName, dangerType, locationName);
+                                            ns.pushTitle(dangerType), alertMsg, userName, dangerType, locationName, null, senderPhone);
                                     fcmSent++;
                                 } catch (Exception fcmErr) {
                                     fcmFailed++;
@@ -770,6 +790,10 @@ public class DangerAlertActivity extends AppCompatActivity {
         org.json.JSONObject fields = new org.json.JSONObject();
         fields.put("senderId", new org.json.JSONObject("{\"stringValue\":\"" + currentUserId + "\"}"));
         fields.put("senderName", new org.json.JSONObject("{\"stringValue\":\"" + escapeJson(userName) + "\"}"));
+        String senderPhone = getSharedPreferences("capacitor", MODE_PRIVATE).getString("current_user_phone", "");
+        if (senderPhone != null && !senderPhone.isEmpty()) {
+            fields.put("senderPhone", new org.json.JSONObject("{\"stringValue\":\"" + escapeJson(senderPhone) + "\"}"));
+        }
         fields.put("receiverIds", arrayValueObj);
         fields.put("dangerType", new org.json.JSONObject("{\"stringValue\":\"" + escapeJson(dangerType.toLowerCase()) + "\"}"));
         fields.put("alertMsg", new org.json.JSONObject("{\"stringValue\":\"" + escapeJson(alertMsg) + "\"}"));
@@ -794,8 +818,46 @@ public class DangerAlertActivity extends AppCompatActivity {
         Log.i(TAG, "saveHelpMessage result=" + (helpSaveResult != null ? helpSaveResult.substring(0, Math.min(200, helpSaveResult.length())) : "null"));
     }
 
-    private String escapeJson(String s) {
-        return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "");
+    private void playAlertSound() {
+        stopAlertSound();
+        try {
+            Uri soundUri = null;
+            int soundResId = getResources().getIdentifier("alert", "raw", getPackageName());
+            if (soundResId != 0) {
+                soundUri = Uri.parse("android.resource://" + getPackageName() + "/" + soundResId);
+            }
+            if (soundUri == null) {
+                soundUri = Settings.System.DEFAULT_NOTIFICATION_URI;
+            }
+            if (soundUri != null) {
+                alertPlayer = MediaPlayer.create(this, soundUri);
+                if (alertPlayer != null) {
+                    alertPlayer.setLooping(true);
+                    alertPlayer.start();
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "playAlertSound failed", e);
+        }
+    }
+
+    private void stopAlertSound() {
+        soundHandler.removeCallbacks(stopSoundRunnable);
+        if (alertPlayer != null) {
+            try {
+                alertPlayer.stop();
+            } catch (Exception ignored) {
+            }
+            alertPlayer.release();
+            alertPlayer = null;
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        stopAlertSound();
+        if (timer != null) timer.cancel();
+        super.onDestroy();
     }
 
     @Override
@@ -806,9 +868,7 @@ public class DangerAlertActivity extends AppCompatActivity {
         }
     }
 
-    @Override
-    protected void onDestroy() {
-        if (timer != null) timer.cancel();
-        super.onDestroy();
+    private String escapeJson(String s) {
+        return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "");
     }
 }

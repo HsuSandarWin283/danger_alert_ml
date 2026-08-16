@@ -15,6 +15,7 @@ export interface HelpMessage {
   id?: string
   senderId: string
   senderName: string
+  senderPhone?: string
   receiverIds: string[]
   dangerType: string
   alertMsg: string
@@ -34,6 +35,7 @@ export async function saveHelpMessage(msg: Omit<HelpMessage, 'id' | 'createdAt'>
     dangerType: msg.dangerType,
     alertMsg: msg.alertMsg,
   }
+  if (msg.senderPhone) payload.senderPhone = msg.senderPhone
   if (typeof msg.lat === 'number') payload.lat = msg.lat
   if (typeof msg.lng === 'number') payload.lng = msg.lng
   if (msg.locationName) payload.locationName = msg.locationName

@@ -29,7 +29,7 @@
             android:name=".DangerAlertActivity"
             android:exported="false"
             android:theme="@style/DangerAlertTheme"
-            android:launchMode="singleInstance"
+            android:launchMode="singleTask"
             android:showOnLockScreen="true"
             android:showWhenLocked="true"
             android:turnScreenOn="true" />
@@ -38,7 +38,7 @@
             android:name=".HelpAlertActivity"
             android:exported="false"
             android:theme="@style/DangerAlertTheme"
-            android:launchMode="singleInstance"
+            android:launchMode="singleTask"
             android:showOnLockScreen="true"
             android:showWhenLocked="true"
             android:turnScreenOn="true" />

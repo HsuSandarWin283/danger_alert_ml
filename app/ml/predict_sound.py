@@ -23,7 +23,7 @@ CNN_SCALER_PATH = os.path.join(MODEL_DIR, "cnn_scaler_info.pkl")
 LEGACY_MODEL_PATH = os.path.join(MODEL_DIR, "danger_sound_model.pkl")
 
 CNN_SAMPLE_RATE = 22050
-CNN_DURATION = 5.0
+CNN_DURATION = 3.0
 CNN_N_MELS = 128
 CNN_N_FFT = 2048
 CNN_HOP_LENGTH = 512

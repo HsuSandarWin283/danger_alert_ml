@@ -42,6 +42,16 @@ export default function HelpHistoryPage() {
     }
   }, [user])
 
+  const openMap = (lat: number, lng: number, name?: string) => {
+    const q = name || `${lat},${lng}`
+    const url = `https://maps.google.com/maps?q=${encodeURIComponent(q)}`
+    window.open(url, '_blank')
+  }
+
+  const callPhone = (phone: string) => {
+    window.location.href = `tel:${encodeURIComponent(phone)}`
+  }
+
   if (authLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
@@ -81,6 +91,14 @@ export default function HelpHistoryPage() {
                       <p className="text-xs text-gray-400 mt-1">
                         {isSender ? `To: ${item.receiverIds?.length ?? 0} ${t('members')}` : `From: ${item.senderName || item.senderId}`}
                       </p>
+                      {!isSender && item.senderPhone && (
+                        <button
+                          onClick={() => callPhone(item.senderPhone!)}
+                          className="text-sm text-blue-600 underline mt-1"
+                        >
+                          {item.senderPhone}
+                        </button>
+                      )}
                     </div>
                     <span className={`px-3 py-1 rounded-full text-xs font-semibold uppercase ${
                       isSender ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
@@ -90,9 +108,12 @@ export default function HelpHistoryPage() {
                   </div>
                   <p className="text-gray-700 whitespace-pre-line">{item.alertMsg}</p>
                   {(item.lat !== undefined && item.lng !== undefined) && (
-                    <p className="text-sm text-gray-500 mt-2">
+                    <button
+                      onClick={() => openMap(item.lat!, item.lng!, item.locationName)}
+                      className="text-sm text-blue-600 underline mt-2"
+                    >
                       {t('location')}: {item.locationName || `${item.lat.toFixed(4)}, ${item.lng.toFixed(4)}`}
-                    </p>
+                    </button>
                   )}
                 </div>
               )

@@ -117,29 +117,45 @@ public class BackgroundMonitorPlugin extends Plugin {
         editor.apply();
 
         if (!userId.isEmpty()) {
-            String pendingToken = getContext().getSharedPreferences("capacitor", android.content.Context.MODE_PRIVATE)
-                    .getString("pending_fcm_token", null);
-            if (pendingToken != null && !pendingToken.isEmpty()) {
-                com.danger.alert.MainActivity.saveTokenToFirestore(userId, pendingToken);
-                editor.putString("fcm_token", pendingToken);
-                editor.remove("pending_fcm_token");
-                editor.apply();
-                Log.i(TAG, "Saved pending FCM token to Firestore for user: " + userId);
-            } else {
-                Log.i(TAG, "No pending token, fetching fresh token for user: " + userId);
-                com.google.firebase.messaging.FirebaseMessaging.getInstance().getToken()
-                        .addOnCompleteListener(task -> {
-                            if (task.isSuccessful() && task.getResult() != null) {
-                                String token = task.getResult();
-                                Log.i(TAG, "Fresh FCM token: " + token.substring(0, Math.min(40, token.length())));
-                                com.danger.alert.MainActivity.saveTokenToFirestore(userId, token);
-                                editor.putString("fcm_token", token);
-                                editor.apply();
-                            } else {
-                                Log.e(TAG, "Failed to get fresh FCM token", task.getException());
-                            }
-                        });
-            }
+            new Thread(() -> {
+                String pendingToken = getContext().getSharedPreferences("capacitor", android.content.Context.MODE_PRIVATE)
+                        .getString("pending_fcm_token", null);
+                if (pendingToken != null && !pendingToken.isEmpty()) {
+                    try {
+                        com.danger.alert.MainActivity.saveTokenToFirestore(userId, pendingToken);
+                    } catch (Exception e) {
+                        Log.e(TAG, "Failed to save pending FCM token to Firestore", e);
+                    }
+                    SharedPreferences.Editor ed = getContext().getSharedPreferences("capacitor", android.content.Context.MODE_PRIVATE).edit();
+                    ed.putString("fcm_token", pendingToken);
+                    ed.remove("pending_fcm_token");
+                    ed.apply();
+                    Log.i(TAG, "Saved pending FCM token to Firestore for user: " + userId);
+                } else {
+                    Log.i(TAG, "No pending token, fetching fresh token for user: " + userId);
+                    try {
+                        com.google.firebase.messaging.FirebaseMessaging.getInstance().getToken()
+                                .addOnCompleteListener(task -> {
+                                    if (task.isSuccessful() && task.getResult() != null) {
+                                        String token = task.getResult();
+                                        Log.i(TAG, "Fresh FCM token: " + token.substring(0, Math.min(40, token.length())));
+                                        try {
+                                            com.danger.alert.MainActivity.saveTokenToFirestore(userId, token);
+                                        } catch (Exception e) {
+                                            Log.e(TAG, "Failed to save fresh FCM token to Firestore", e);
+                                        }
+                                        SharedPreferences.Editor ed = getContext().getSharedPreferences("capacitor", android.content.Context.MODE_PRIVATE).edit();
+                                        ed.putString("fcm_token", token);
+                                        ed.apply();
+                                    } else {
+                                        Log.e(TAG, "Failed to get fresh FCM token", task.getException());
+                                    }
+                                });
+                    } catch (Exception e) {
+                        Log.e(TAG, "Failed to fetch FCM token", e);
+                    }
+                }
+            }).start();
         }
 
         JSObject result = new JSObject();
@@ -170,35 +186,37 @@ public class BackgroundMonitorPlugin extends Plugin {
         String privateKey = getContext().getSharedPreferences("capacitor", android.content.Context.MODE_PRIVATE)
                 .getString("fcm_private_key", null);
 
-        try {
-            JSArray membersArray = call.getArray("members");
-            String accessToken = FcmHelper.getAccessToken(getContext());
+        new Thread(() -> {
+            try {
+                JSArray membersArray = call.getArray("members");
+                String accessToken = FcmHelper.getAccessToken(getContext());
 
-            int sent = 0;
-            if (membersArray != null) {
-                for (int i = 0; i < membersArray.length(); i++) {
-                    JSONObject member = membersArray.getJSONObject(i);
-                    String fcmToken = member.getString("fcmToken");
-                    if (fcmToken == null || fcmToken.isEmpty()) continue;
-                    try {
-                        NotificationStrings ns = new NotificationStrings(getContext());
-                        FcmHelper.sendPush(accessToken, fcmToken,
-                                ns.pushTitle(dangerType), alertMsg);
-                        sent++;
-                    } catch (Exception e) {
-                        Log.w(TAG, "FCM failed for member " + i, e);
+                int sent = 0;
+                if (membersArray != null) {
+                    for (int i = 0; i < membersArray.length(); i++) {
+                        JSONObject member = membersArray.getJSONObject(i);
+                        String fcmToken = member.getString("fcmToken");
+                        if (fcmToken == null || fcmToken.isEmpty()) continue;
+                        try {
+                            NotificationStrings ns = new NotificationStrings(getContext());
+                            FcmHelper.sendPush(accessToken, fcmToken,
+                                    ns.pushTitle(dangerType), alertMsg);
+                            sent++;
+                        } catch (Exception e) {
+                            Log.w(TAG, "FCM failed for member " + i, e);
+                        }
                     }
                 }
-            }
 
-            JSObject result = new JSObject();
-            result.put("sent", sent);
-            result.put("total", membersArray != null ? membersArray.length() : 0);
-            call.resolve(result);
-        } catch (Exception e) {
-            Log.e(TAG, "sendTrustedAlert failed", e);
-            call.reject("Failed to send alert: " + e.getMessage());
-        }
+                JSObject result = new JSObject();
+                result.put("sent", sent);
+                result.put("total", membersArray != null ? membersArray.length() : 0);
+                call.resolve(result);
+            } catch (Exception e) {
+                Log.e(TAG, "sendTrustedAlert failed", e);
+                call.reject("Failed to send alert: " + e.getMessage());
+            }
+        }).start();
     }
 
     @PluginMethod
@@ -210,184 +228,207 @@ public class BackgroundMonitorPlugin extends Plugin {
                 .getString("current_user_id", null);
         String projectId = getContext().getSharedPreferences("capacitor", android.content.Context.MODE_PRIVATE)
                 .getString("firebase_project_id", null);
-        String userName = getContext().getSharedPreferences("capacitor", android.content.Context.MODE_PRIVATE)
-                .getString("user_display_name", "");
+        final String[] userNameHolder = new String[] { getContext().getSharedPreferences("capacitor", android.content.Context.MODE_PRIVATE)
+                .getString("user_display_name", "") };
+        final String[] userPhoneHolder = new String[] { getContext().getSharedPreferences("capacitor", android.content.Context.MODE_PRIVATE)
+                .getString("current_user_phone", "") };
 
         if (currentUserId == null || currentUserId.isEmpty() || projectId == null || projectId.isEmpty()) {
             call.reject("Missing Firebase config");
             return;
         }
 
-        try {
-            String accessToken = FcmHelper.getAccessToken(getContext());
+        new Thread(() -> {
+            try {
+                String accessToken = FcmHelper.getAccessToken(getContext());
 
-            if (userName == null || userName.isEmpty()) {
-                try {
-                    String userDoc = httpGet("https://firestore.googleapis.com/v1/projects/" + projectId + "/databases/(default)/documents/users/" + currentUserId, accessToken);
-                    if (userDoc != null && userDoc.contains("stringValue")) {
-                        org.json.JSONObject userDocObj = new org.json.JSONObject(userDoc);
-                        org.json.JSONObject userFields = userDocObj.optJSONObject("fields");
-                        if (userFields != null) {
-                            org.json.JSONObject nameObj = userFields.optJSONObject("name");
-                            if (nameObj != null) userName = nameObj.optString("stringValue", "");
-                        }
-                    }
-                } catch (Exception e) {
-                    Log.w(TAG, "Failed to get user name from Firestore: " + e.getMessage());
-                }
-            }
-
-            final double[] lat = {0};
-            final double[] lng = {0};
-            final String[] locationName = {""};
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                if (getContext().checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED ||
-                    getContext().checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                    
-                    FusedLocationProviderClient client = LocationServices.getFusedLocationProviderClient(getContext());
-                    final CountDownLatch latch = new CountDownLatch(1);
-                    final boolean[] done = {false};
-                    
-                    client.getLastLocation().addOnCompleteListener(task -> {
-                        if (!done[0]) {
-                            done[0] = true;
-                            if (task.isSuccessful() && task.getResult() != null) {
-                                Location loc = task.getResult();
-                                lat[0] = loc.getLatitude();
-                                lng[0] = loc.getLongitude();
-                                locationName[0] = String.format(Locale.getDefault(), "%.4f, %.4f", lat[0], lng[0]);
-                                try {
-                                    Geocoder geo = new Geocoder(getContext(), Locale.getDefault());
-                                    List<Address> addrs = geo.getFromLocation(lat[0], lng[0], 1);
-                                    if (addrs != null && !addrs.isEmpty()) {
-                                        Address a = addrs.get(0);
-                                        StringBuilder sb = new StringBuilder();
-                                        for (int i = 0; i <= Math.min(a.getMaxAddressLineIndex(), 2); i++) {
-                                            if (sb.length() > 0) sb.append(", ");
-                                            sb.append(a.getAddressLine(i));
-                                        }
-                                        locationName[0] = sb.toString();
-                                    }
-                                } catch (Exception e) {
-                                    Log.w(TAG, "Geocoder failed", e);
-                                }
-                            }
-                            latch.countDown();
-                        }
-                    });
-                    
+                if (userNameHolder[0] == null || userNameHolder[0].isEmpty()) {
                     try {
-                        latch.await(3, TimeUnit.SECONDS);
+                        String userDoc = httpGet("https://firestore.googleapis.com/v1/projects/" + projectId + "/databases/(default)/documents/users/" + currentUserId, accessToken);
+                        if (userDoc != null && userDoc.contains("stringValue")) {
+                            org.json.JSONObject userDocObj = new org.json.JSONObject(userDoc);
+                            org.json.JSONObject userFields = userDocObj.optJSONObject("fields");
+                            if (userFields != null) {
+                                org.json.JSONObject nameObj = userFields.optJSONObject("name");
+                                if (nameObj != null) userNameHolder[0] = nameObj.optString("stringValue", "");
+                            }
+                        }
                     } catch (Exception e) {
-                        Log.w(TAG, "Location fetch timeout", e);
+                        Log.w(TAG, "Failed to get user name from Firestore: " + e.getMessage());
                     }
                 }
-            }
 
-            String queryBody = "{\"structuredQuery\":{\"from\":[{\"collectionId\":\"group_members\"}],"
-                    + "\"where\":{\"fieldFilter\":{\"field\":{\"fieldPath\":\"groupId\"},"
-                    + "\"op\":\"EQUAL\","
-                    + "\"value\":{\"stringValue\":\"" + currentUserId + "\"}}},"
-                    + "\"limit\":100}}";
-            String membersUrl = "https://firestore.googleapis.com/v1/projects/" + projectId + "/databases/(default)/documents:runQuery";
-            String membersJson = httpPost(membersUrl, queryBody, accessToken);
+                if (userPhoneHolder[0] == null || userPhoneHolder[0].isEmpty()) {
+                    try {
+                        String userDoc = httpGet("https://firestore.googleapis.com/v1/projects/" + projectId + "/databases/(default)/documents/users/" + currentUserId, accessToken);
+                        if (userDoc != null && userDoc.contains("stringValue")) {
+                            org.json.JSONObject userDocObj = new org.json.JSONObject(userDoc);
+                            org.json.JSONObject userFields = userDocObj.optJSONObject("fields");
+                            if (userFields != null) {
+                                org.json.JSONObject phoneObj = userFields.optJSONObject("phone");
+                                if (phoneObj != null) userPhoneHolder[0] = phoneObj.optString("stringValue", "");
+                            }
+                        }
+                    } catch (Exception e) {
+                        Log.w(TAG, "Failed to get user phone from Firestore: " + e.getMessage());
+                    }
+                }
 
-            java.util.ArrayList<String> memberUids = new java.util.ArrayList<>();
-            java.util.ArrayList<String> memberTokens = new java.util.ArrayList<>();
-            int parsedCount = 0;
+                final double[] lat = {0};
+                final double[] lng = {0};
+                final String[] locationName = {""};
 
-            if (membersJson != null && membersJson.contains("document")) {
-                org.json.JSONArray docsArray = new org.json.JSONArray(membersJson);
-                parsedCount = docsArray.length();
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    if (getContext().checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED ||
+                        getContext().checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
 
-                for (int i = 0; i < docsArray.length(); i++) {
-                    org.json.JSONObject docWrapper = docsArray.getJSONObject(i);
-                    org.json.JSONObject docObj = docWrapper.optJSONObject("document");
-                    if (docObj == null) continue;
-                    org.json.JSONObject fields = docObj.optJSONObject("fields");
-                    if (fields == null) continue;
+                        FusedLocationProviderClient client = LocationServices.getFusedLocationProviderClient(getContext());
+                        final CountDownLatch latch = new CountDownLatch(1);
+                        final boolean[] done = {false};
 
-                    org.json.JSONObject userIdField = fields.optJSONObject("userId");
-                    String memberUid = userIdField != null ? userIdField.optString("stringValue", "") : "";
-                    if (memberUid.isEmpty()) continue;
-                    memberUids.add(memberUid);
+                        client.getLastLocation().addOnCompleteListener(task -> {
+                            if (!done[0]) {
+                                done[0] = true;
+                                if (task.isSuccessful() && task.getResult() != null) {
+                                    Location loc = task.getResult();
+                                    lat[0] = loc.getLatitude();
+                                    lng[0] = loc.getLongitude();
+                                    locationName[0] = String.format(Locale.getDefault(), "%.4f, %.4f", lat[0], lng[0]);
+                                    try {
+                                        Geocoder geo = new Geocoder(getContext(), Locale.getDefault());
+                                        List<Address> addrs = geo.getFromLocation(lat[0], lng[0], 1);
+                                        if (addrs != null && !addrs.isEmpty()) {
+                                            Address a = addrs.get(0);
+                                            StringBuilder sb = new StringBuilder();
+                                            for (int i = 0; i <= Math.min(a.getMaxAddressLineIndex(), 2); i++) {
+                                                if (sb.length() > 0) sb.append(", ");
+                                                sb.append(a.getAddressLine(i));
+                                            }
+                                            locationName[0] = sb.toString();
+                                        }
+                                    } catch (Exception e) {
+                                        Log.w(TAG, "Geocoder failed", e);
+                                    }
+                                }
+                                latch.countDown();
+                            }
+                        });
 
-                    String memberDoc = httpGet("https://firestore.googleapis.com/v1/projects/" + projectId + "/databases/(default)/documents/users/" + memberUid, accessToken);
-                    String fcmToken = null;
-                    if (memberDoc != null && memberDoc.contains("stringValue")) {
-                        org.json.JSONObject memberDocObj = new org.json.JSONObject(memberDoc);
-                        org.json.JSONObject memberFields = memberDocObj.optJSONObject("fields");
-                        if (memberFields != null) {
-                            org.json.JSONObject fcmObj = memberFields.optJSONObject("fcmToken");
-                            if (fcmObj != null) fcmToken = fcmObj.optString("stringValue", "");
+                        try {
+                            latch.await(3, TimeUnit.SECONDS);
+                        } catch (Exception e) {
+                            Log.w(TAG, "Location fetch timeout", e);
                         }
                     }
-                    if (fcmToken == null || fcmToken.isEmpty()) continue;
-                    memberTokens.add(fcmToken.trim().replaceAll("\\s+", ""));
                 }
-            }
 
-            int sent = 0;
-            NotificationStrings nsEmergency = new NotificationStrings(getContext());
-            String notificationBody = (userName != null && !userName.isEmpty()
-                    ? nsEmergency.needsHelpWithName(userName)
-                    : nsEmergency.needsHelp());
-            String effectiveAlertMsg = notificationBody;
-            if (lat[0] != 0 || lng[0] != 0) {
-                notificationBody += "\n" + nsEmergency.locationLabel() + ": " + locationName[0];
-            }
-            for (String token : memberTokens) {
-                try {
-                    FcmHelper.sendPush(accessToken, token, nsEmergency.pushTitle(dangerType), notificationBody, userName, dangerType, locationName[0], effectiveAlertMsg);
-                    sent++;
-                } catch (Exception e) {
-                    Log.w(TAG, "FCM failed for token " + token, e);
+                String queryBody = "{\"structuredQuery\":{\"from\":[{\"collectionId\":\"group_members\"}],"
+                        + "\"where\":{\"fieldFilter\":{\"field\":{\"fieldPath\":\"groupId\"},"
+                        + "\"op\":\"EQUAL\","
+                        + "\"value\":{\"stringValue\":\"" + currentUserId + "\"}}},"
+                        + "\"limit\":100}}";
+                String membersUrl = "https://firestore.googleapis.com/v1/projects/" + projectId + "/databases/(default)/documents:runQuery";
+                String membersJson = httpPost(membersUrl, queryBody, accessToken);
+
+                java.util.ArrayList<String> memberUids = new java.util.ArrayList<>();
+                java.util.ArrayList<String> memberTokens = new java.util.ArrayList<>();
+                int parsedCount = 0;
+
+                if (membersJson != null && membersJson.contains("document")) {
+                    org.json.JSONArray docsArray = new org.json.JSONArray(membersJson);
+                    parsedCount = docsArray.length();
+
+                    for (int i = 0; i < docsArray.length(); i++) {
+                        org.json.JSONObject docWrapper = docsArray.getJSONObject(i);
+                        org.json.JSONObject docObj = docWrapper.optJSONObject("document");
+                        if (docObj == null) continue;
+                        org.json.JSONObject fields = docObj.optJSONObject("fields");
+                        if (fields == null) continue;
+
+                        org.json.JSONObject userIdField = fields.optJSONObject("userId");
+                        String memberUid = userIdField != null ? userIdField.optString("stringValue", "") : "";
+                        if (memberUid.isEmpty()) continue;
+                        memberUids.add(memberUid);
+
+                        String memberDoc = httpGet("https://firestore.googleapis.com/v1/projects/" + projectId + "/databases/(default)/documents/users/" + memberUid, accessToken);
+                        String fcmToken = null;
+                        if (memberDoc != null && memberDoc.contains("stringValue")) {
+                            org.json.JSONObject memberDocObj = new org.json.JSONObject(memberDoc);
+                            org.json.JSONObject memberFields = memberDocObj.optJSONObject("fields");
+                            if (memberFields != null) {
+                                org.json.JSONObject fcmObj = memberFields.optJSONObject("fcmToken");
+                                if (fcmObj != null) fcmToken = fcmObj.optString("stringValue", "");
+                            }
+                        }
+                        if (fcmToken == null || fcmToken.isEmpty()) continue;
+                        memberTokens.add(fcmToken.trim().replaceAll("\\s+", ""));
+                    }
                 }
-            }
 
-            org.json.JSONArray idsArray = new org.json.JSONArray();
-            for (String id : memberUids) {
-                idsArray.put(new org.json.JSONObject("{\"stringValue\":\"" + id + "\"}"));
-            }
-
-            org.json.JSONObject valuesObj = new org.json.JSONObject();
-            valuesObj.put("values", idsArray);
-
-            org.json.JSONObject arrayValueObj = new org.json.JSONObject();
-            arrayValueObj.put("arrayValue", valuesObj);
-
-            org.json.JSONObject fields = new org.json.JSONObject();
-            fields.put("senderId", new org.json.JSONObject("{\"stringValue\":\"" + currentUserId + "\"}"));
-            fields.put("senderName", new org.json.JSONObject("{\"stringValue\":\"" + (userName != null ? userName.replace("\"", "\\\"") : "") + "\"}"));
-            fields.put("receiverIds", arrayValueObj);
-            fields.put("dangerType", new org.json.JSONObject("{\"stringValue\":\"" + dangerType.toLowerCase() + "\"}"));
-            fields.put("alertMsg", new org.json.JSONObject("{\"stringValue\":\"" + alertMsg.replace("\"", "\\\"") + "\"}"));
-            if (lat[0] != 0 || lng[0] != 0) {
-                fields.put("lat", new org.json.JSONObject("{\"doubleValue\":" + lat[0] + "}"));
-                fields.put("lng", new org.json.JSONObject("{\"doubleValue\":" + lng[0] + "}"));
-                if (locationName[0] != null && !locationName[0].isEmpty()) {
-                    fields.put("locationName", new org.json.JSONObject("{\"stringValue\":\"" + locationName[0] + "\"}"));
+                int sent = 0;
+                NotificationStrings nsEmergency = new NotificationStrings(getContext());
+                String notificationBody = (userNameHolder[0] != null && !userNameHolder[0].isEmpty()
+                        ? nsEmergency.needsHelpWithName(userNameHolder[0])
+                        : nsEmergency.needsHelp());
+                String effectiveAlertMsg = notificationBody;
+                if (lat[0] != 0 || lng[0] != 0) {
+                    notificationBody += "\n" + nsEmergency.locationLabel() + ": " + locationName[0];
                 }
+                for (String token : memberTokens) {
+                    try {
+                        FcmHelper.sendPush(accessToken, token, nsEmergency.pushTitle(dangerType), notificationBody, userNameHolder[0], dangerType, locationName[0], effectiveAlertMsg, userPhoneHolder[0]);
+                        sent++;
+                    } catch (Exception e) {
+                        Log.w(TAG, "FCM failed for token " + token, e);
+                    }
+                }
+
+                org.json.JSONArray idsArray = new org.json.JSONArray();
+                for (String id : memberUids) {
+                    idsArray.put(new org.json.JSONObject("{\"stringValue\":\"" + id + "\"}"));
+                }
+
+                org.json.JSONObject valuesObj = new org.json.JSONObject();
+                valuesObj.put("values", idsArray);
+
+                org.json.JSONObject arrayValueObj = new org.json.JSONObject();
+                arrayValueObj.put("arrayValue", valuesObj);
+
+                org.json.JSONObject fields = new org.json.JSONObject();
+                fields.put("senderId", new org.json.JSONObject("{\"stringValue\":\"" + currentUserId + "\"}"));
+                fields.put("senderName", new org.json.JSONObject("{\"stringValue\":\"" + (userNameHolder[0] != null ? userNameHolder[0].replace("\"", "\\\"") : "") + "\"}"));
+                if (userPhoneHolder[0] != null && !userPhoneHolder[0].isEmpty()) {
+                    fields.put("senderPhone", new org.json.JSONObject("{\"stringValue\":\"" + userPhoneHolder[0].replace("\"", "\\\"") + "\"}"));
+                }
+                fields.put("receiverIds", arrayValueObj);
+                fields.put("dangerType", new org.json.JSONObject("{\"stringValue\":\"" + dangerType.toLowerCase() + "\"}"));
+                fields.put("alertMsg", new org.json.JSONObject("{\"stringValue\":\"" + alertMsg.replace("\"", "\\\"") + "\"}"));
+                if (lat[0] != 0 || lng[0] != 0) {
+                    fields.put("lat", new org.json.JSONObject("{\"doubleValue\":" + lat[0] + "}"));
+                    fields.put("lng", new org.json.JSONObject("{\"doubleValue\":" + lng[0] + "}"));
+                    if (locationName[0] != null && !locationName[0].isEmpty()) {
+                        fields.put("locationName", new org.json.JSONObject("{\"stringValue\":\"" + locationName[0] + "\"}"));
+                    }
+                }
+                java.util.Date now = new java.util.Date();
+                java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US);
+                sdf.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+                String timestamp = sdf.format(now);
+                fields.put("createdAt", new org.json.JSONObject("{\"timestampValue\":\"" + timestamp + "\"}"));
+
+                String body = "{\"fields\":" + fields.toString() + "}";
+                String url = "https://firestore.googleapis.com/v1/projects/" + projectId + "/databases/(default)/documents/help_history";
+                httpPost(url, body, accessToken);
+
+                JSObject result = new JSObject();
+                result.put("sent", sent);
+                result.put("total", memberTokens.size());
+                call.resolve(result);
+            } catch (Exception e) {
+                Log.e(TAG, "sendEmergencyAlert failed", e);
+                call.reject("Failed to send emergency alert: " + e.getMessage());
             }
-            java.util.Date now = new java.util.Date();
-            java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US);
-            sdf.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
-            String timestamp = sdf.format(now);
-            fields.put("createdAt", new org.json.JSONObject("{\"timestampValue\":\"" + timestamp + "\"}"));
-
-            String body = "{\"fields\":" + fields.toString() + "}";
-            String url = "https://firestore.googleapis.com/v1/projects/" + projectId + "/databases/(default)/documents/help_history";
-            httpPost(url, body, accessToken);
-
-            JSObject result = new JSObject();
-            result.put("sent", sent);
-            result.put("total", memberTokens.size());
-            call.resolve(result);
-        } catch (Exception e) {
-            Log.e(TAG, "sendEmergencyAlert failed", e);
-            call.reject("Failed to send emergency alert: " + e.getMessage());
-        }
+        }).start();
     }
 
     private String httpPost(String urlStr, String body, String bearerToken) throws Exception {

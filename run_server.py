@@ -2,6 +2,7 @@ import gc
 import logging
 import os
 import sys
+from pathlib import Path
 
 logging.basicConfig(
     level=logging.INFO,
@@ -10,7 +11,7 @@ logging.basicConfig(
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "app", "ml"))
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, UploadFile, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import uvicorn
@@ -22,6 +23,29 @@ from pathlib import Path
 from predict_sound import load_model, predict, predict_with_debug
 
 logger = logging.getLogger(__name__)
+
+try:
+    import firebase_admin
+    from firebase_admin import credentials, firestore, messaging
+    _firebase_initialized = False
+
+    def _init_firebase():
+        global _firebase_initialized
+        if _firebase_initialized:
+            return
+        sa_path = Path(__file__).resolve().parent / "app" / "ml" / "service-account.json"
+        if sa_path.exists():
+            cred = credentials.Certificate(str(sa_path))
+            firebase_admin.initialize_app(cred)
+            _firebase_initialized = True
+            logger.info("Firebase Admin initialized for emergency alerts")
+        else:
+            logger.warning("service-account.json not found — emergency alerts will fail")
+
+    _init_firebase()
+
+except Exception as exc:
+    logger.warning("firebase-admin not available: %s", exc)
 
 app = FastAPI(title="Danger Sound Detection API")
 
@@ -166,6 +190,74 @@ async def health_check():
             content={"status": "degraded", "model_loaded": False, "detail": "Model not loaded yet"},
         )
     return {"status": "healthy", "model_loaded": True}
+
+
+@app.post("/emergency-alert")
+async def emergency_alert(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+
+    sender_id = body.get("senderId")
+    receiver_ids = body.get("receiverIds", [])
+    sender_name = body.get("senderName", "")
+    danger_type = body.get("dangerType", "trouble")
+    location_name = body.get("locationName", "")
+    alert_msg = body.get("alertMsg", "Emergency alert")
+
+    if not sender_id or not receiver_ids:
+        raise HTTPException(status_code=400, detail="senderId and receiverIds are required")
+
+    if not _firebase_initialized:
+        raise HTTPException(status_code=503, detail="Firebase not initialized")
+
+    sent = 0
+    db = firestore.client()
+
+    for uid in receiver_ids:
+        try:
+            user_doc = db.collection("users").document(uid).get()
+            fcm_token = None
+            if user_doc.exists:
+                data = user_doc.to_dict() or {}
+                fcm_token = data.get("fcmToken") or data.get("fcm_token")
+
+            if not fcm_token:
+                continue
+
+            title = f"{sender_name} needs help!" if sender_name else "Emergency Alert"
+            message = messaging.Message(
+                data={
+                    "type": "help_message",
+                    "route": "/help-alert",
+                    "title": title,
+                    "body": alert_msg,
+                    "senderName": sender_name or "",
+                    "dangerType": danger_type,
+                    "locationName": location_name or "",
+                    "alertMsg": alert_msg,
+                },
+                token=fcm_token,
+                android=messaging.AndroidConfig(priority="high"),
+            )
+            messaging.send(message)
+            sent += 1
+        except Exception as exc:
+            logger.warning("FCM failed for %s: %s", uid, exc)
+
+    help_ref = db.collection("help_history").document()
+    help_ref.set({
+        "senderId": sender_id,
+        "senderName": sender_name,
+        "receiverIds": receiver_ids,
+        "dangerType": danger_type,
+        "alertMsg": alert_msg,
+        "locationName": location_name,
+        "createdAt": firestore.SERVER_TIMESTAMP,
+    })
+
+    return {"sent": sent, "total": len(receiver_ids)}
 
 
 if __name__ == "__main__":

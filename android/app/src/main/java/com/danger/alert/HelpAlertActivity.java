@@ -5,14 +5,19 @@ import android.content.Intent;
 import android.graphics.Color;
 import android.location.Address;
 import android.location.Geocoder;
+import android.net.Uri;
+import android.media.MediaPlayer;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.PowerManager;
+import android.provider.Settings;
 import android.util.Log;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewParent;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.LinearLayout;
@@ -41,6 +46,14 @@ public class HelpAlertActivity extends AppCompatActivity {
     private LinearLayout rootLayout;
     private String senderName = "";
     private String dangerType = "unknown";
+    private MediaPlayer alertPlayer;
+    private final Handler soundHandler = new Handler(Looper.getMainLooper());
+    private final Runnable stopSoundRunnable = new Runnable() {
+        @Override
+        public void run() {
+            stopAlertSound();
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -79,11 +92,13 @@ public class HelpAlertActivity extends AppCompatActivity {
             String dangerType = getIntent().getStringExtra("dangerType");
             String alertMsg = getIntent().getStringExtra("alertMsg");
             String locationName = getIntent().getStringExtra("locationName");
+            String senderPhone = getIntent().getStringExtra("senderPhone");
             if (dangerType != null && "TROUBLE".equalsIgnoreCase(dangerType)) {
-                buildReceivedManualUI(senderName, alertMsg, locationName);
+                buildReceivedManualUI(senderName, alertMsg, locationName, senderPhone);
             } else {
-                buildReceivedDangerUI(dangerType, alertMsg, locationName);
+                buildReceivedDangerUI(dangerType, alertMsg, locationName, senderPhone);
             }
+            playAlertSound();
             return;
         }
 
@@ -91,9 +106,10 @@ public class HelpAlertActivity extends AppCompatActivity {
         if (body == null) body = new NotificationStrings(this).helpAlertDefaultBody();
 
         buildUI(title, body);
+        playAlertSound();
     }
 
-    private void buildReceivedDangerUI(String dangerType, String alertMsg, String locationName) {
+    private void buildReceivedDangerUI(String dangerType, String alertMsg, String locationName, String senderPhone) {
         rootLayout = new LinearLayout(this);
         rootLayout.setOrientation(LinearLayout.VERTICAL);
         rootLayout.setGravity(Gravity.CENTER_HORIZONTAL);
@@ -125,6 +141,103 @@ public class HelpAlertActivity extends AppCompatActivity {
         msgView.setPadding(0, 10, 0, 40);
         rootLayout.addView(msgView);
 
+        Button phoneBtn = new Button(this);
+        if (senderPhone != null && !senderPhone.isEmpty()) {
+            phoneBtn.setText(senderPhone);
+        } else {
+            phoneBtn.setText("Phone number");
+        }
+        phoneBtn.setTextColor(Color.WHITE);
+        phoneBtn.setBackgroundResource(R.drawable.button_ripple);
+        phoneBtn.setPadding(24, 24, 24, 24);
+        phoneBtn.setGravity(Gravity.CENTER);
+        phoneBtn.setClickable(true);
+        phoneBtn.setFocusable(true);
+        LinearLayout.LayoutParams phoneLP = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        phoneBtn.setLayoutParams(phoneLP);
+        phoneBtn.setOnTouchListener(new View.OnTouchListener() {
+            private float downX, downY;
+            private long downTime;
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                    downX = event.getX();
+                    downY = event.getY();
+                    downTime = System.currentTimeMillis();
+                    ViewParent parent = v.getParent();
+                    if (parent != null) parent.requestDisallowInterceptTouchEvent(true);
+                    return true;
+                } else if (event.getAction() == MotionEvent.ACTION_UP) {
+                    float upX = event.getX();
+                    float upY = event.getY();
+                    long upTime = System.currentTimeMillis();
+                    if (Math.abs(upX - downX) < 20 && Math.abs(upY - downY) < 20 && (upTime - downTime) < 300) {
+                        String number = phoneBtn.getText().toString().trim();
+                        Log.d("HelpAlertActivity", "Phone button tapped, number=" + number);
+                        stopAlertSound();
+                        if (!number.isEmpty() && !"Phone number".equalsIgnoreCase(number)) {
+                            Intent dialIntent = new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + Uri.encode(number)));
+                            dialIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                            Log.d("HelpAlertActivity", "Opening dialer chooser for " + number);
+                            startActivity(Intent.createChooser(dialIntent, "Open with"));
+                        } else {
+                            Log.w("HelpAlertActivity", "Phone number empty or placeholder");
+                        }
+                        finish();
+                    }
+                    ViewParent parent = v.getParent();
+                    if (parent != null) parent.requestDisallowInterceptTouchEvent(false);
+                    return true;
+                }
+                return false;
+            }
+        });
+        rootLayout.addView(phoneBtn);
+
+        String loc = locationName != null && !locationName.isEmpty() ? locationName : ns.locationUnavailableDefault();
+        Button locBtn = new Button(this);
+        locBtn.setText(ns.locationLabel() + " : " + loc);
+        locBtn.setTextColor(Color.WHITE);
+        locBtn.setBackgroundResource(R.drawable.button_ripple);
+        locBtn.setTextSize(18);
+        locBtn.setGravity(Gravity.CENTER);
+        locBtn.setPadding(24, 24, 24, 24);
+        locBtn.setClickable(true);
+        locBtn.setFocusable(true);
+        LinearLayout.LayoutParams locLP = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        locBtn.setLayoutParams(locLP);
+        locBtn.setOnTouchListener(new View.OnTouchListener() {
+            private float downX, downY;
+            private long downTime;
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                    downX = event.getX();
+                    downY = event.getY();
+                    downTime = System.currentTimeMillis();
+                    ViewParent parent = v.getParent();
+                    if (parent != null) parent.requestDisallowInterceptTouchEvent(true);
+                    return true;
+                } else if (event.getAction() == MotionEvent.ACTION_UP) {
+                    float upX = event.getX();
+                    float upY = event.getY();
+                    long upTime = System.currentTimeMillis();
+                    if (Math.abs(upX - downX) < 20 && Math.abs(upY - downY) < 20 && (upTime - downTime) < 300) {
+                        stopAlertSound();
+                        openMap(locationName, null);
+                        finish();
+                    }
+                    ViewParent parent = v.getParent();
+                    if (parent != null) parent.requestDisallowInterceptTouchEvent(false);
+                    return true;
+                }
+                return false;
+            }
+        });
+        rootLayout.addView(locBtn);
+
         Button closeBtn = new Button(this);
         closeBtn.setText(ns.close());
         closeBtn.setTextSize(20);
@@ -136,6 +249,7 @@ public class HelpAlertActivity extends AppCompatActivity {
         closeBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                stopAlertSound();
                 finish();
             }
         });
@@ -147,7 +261,7 @@ public class HelpAlertActivity extends AppCompatActivity {
         setContentView(scrollView);
     }
 
-    private void buildReceivedManualUI(String senderName, String alertMsg, String locationName) {
+    private void buildReceivedManualUI(String senderName, String alertMsg, String locationName, String senderPhone) {
         rootLayout = new LinearLayout(this);
         rootLayout.setOrientation(LinearLayout.VERTICAL);
         rootLayout.setGravity(Gravity.CENTER_HORIZONTAL);
@@ -178,14 +292,102 @@ public class HelpAlertActivity extends AppCompatActivity {
         msgView.setPadding(0, 10, 0, 20);
         rootLayout.addView(msgView);
 
+        Button phoneBtn = new Button(this);
+        if (senderPhone != null && !senderPhone.isEmpty()) {
+            phoneBtn.setText(senderPhone);
+        } else {
+            phoneBtn.setText("Phone number");
+        }
+        phoneBtn.setTextColor(Color.WHITE);
+        phoneBtn.setBackgroundResource(R.drawable.button_ripple);
+        phoneBtn.setPadding(24, 24, 24, 24);
+        phoneBtn.setGravity(Gravity.CENTER);
+        phoneBtn.setClickable(true);
+        phoneBtn.setFocusable(true);
+        LinearLayout.LayoutParams phoneLP = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        phoneBtn.setLayoutParams(phoneLP);
+        phoneBtn.setOnTouchListener(new View.OnTouchListener() {
+            private float downX, downY;
+            private long downTime;
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                    downX = event.getX();
+                    downY = event.getY();
+                    downTime = System.currentTimeMillis();
+                    ViewParent parent = v.getParent();
+                    if (parent != null) parent.requestDisallowInterceptTouchEvent(true);
+                    return true;
+                } else if (event.getAction() == MotionEvent.ACTION_UP) {
+                    float upX = event.getX();
+                    float upY = event.getY();
+                    long upTime = System.currentTimeMillis();
+                    if (Math.abs(upX - downX) < 20 && Math.abs(upY - downY) < 20 && (upTime - downTime) < 300) {
+                        String number = phoneBtn.getText().toString().trim();
+                        Log.d("HelpAlertActivity", "Phone button tapped, number=" + number);
+                        stopAlertSound();
+                        if (!number.isEmpty() && !"Phone number".equalsIgnoreCase(number)) {
+                            Intent dialIntent = new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + Uri.encode(number)));
+                            dialIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                            Log.d("HelpAlertActivity", "Opening dialer chooser for " + number);
+                            startActivity(Intent.createChooser(dialIntent, "Open with"));
+                        } else {
+                            Log.w("HelpAlertActivity", "Phone number empty or placeholder");
+                        }
+                        finish();
+                    }
+                    ViewParent parent = v.getParent();
+                    if (parent != null) parent.requestDisallowInterceptTouchEvent(false);
+                    return true;
+                }
+                return false;
+            }
+        });
+        rootLayout.addView(phoneBtn);
+
         String loc = locationName != null && !locationName.isEmpty() ? locationName : ns.locationUnavailableDefault();
-        TextView locView = new TextView(this);
-        locView.setText(ns.locationLabel() + " : " + loc);
-        locView.setTextColor(Color.WHITE);
-        locView.setTextSize(18);
-        locView.setGravity(Gravity.CENTER);
-        locView.setPadding(0, 10, 0, 40);
-        rootLayout.addView(locView);
+        Button locBtn = new Button(this);
+        locBtn.setText(ns.locationLabel() + " : " + loc);
+        locBtn.setTextColor(Color.WHITE);
+        locBtn.setBackgroundResource(R.drawable.button_ripple);
+        locBtn.setTextSize(18);
+        locBtn.setGravity(Gravity.CENTER);
+        locBtn.setPadding(24, 24, 24, 24);
+        locBtn.setClickable(true);
+        locBtn.setFocusable(true);
+        LinearLayout.LayoutParams locLP = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        locBtn.setLayoutParams(locLP);
+        locBtn.setOnTouchListener(new View.OnTouchListener() {
+            private float downX, downY;
+            private long downTime;
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                    downX = event.getX();
+                    downY = event.getY();
+                    downTime = System.currentTimeMillis();
+                    ViewParent parent = v.getParent();
+                    if (parent != null) parent.requestDisallowInterceptTouchEvent(true);
+                    return true;
+                } else if (event.getAction() == MotionEvent.ACTION_UP) {
+                    float upX = event.getX();
+                    float upY = event.getY();
+                    long upTime = System.currentTimeMillis();
+                    if (Math.abs(upX - downX) < 20 && Math.abs(upY - downY) < 20 && (upTime - downTime) < 300) {
+                        stopAlertSound();
+                        openMap(locationName, null);
+                        finish();
+                    }
+                    ViewParent parent = v.getParent();
+                    if (parent != null) parent.requestDisallowInterceptTouchEvent(false);
+                    return true;
+                }
+                return false;
+            }
+        });
+        rootLayout.addView(locBtn);
 
         Button closeBtn = new Button(this);
         closeBtn.setText(ns.close());
@@ -198,6 +400,7 @@ public class HelpAlertActivity extends AppCompatActivity {
         closeBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                stopAlertSound();
                 finish();
             }
         });
@@ -252,6 +455,7 @@ public class HelpAlertActivity extends AppCompatActivity {
         okBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                stopAlertSound();
                 finish();
             }
         });
@@ -269,6 +473,8 @@ public class HelpAlertActivity extends AppCompatActivity {
         helpBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                stopAlertSound();
+                finish();
                 onSendHelp();
             }
         });
@@ -366,6 +572,7 @@ public class HelpAlertActivity extends AppCompatActivity {
                     }
 
                     String userName = senderName != null && !senderName.isEmpty() ? senderName : "Unknown User";
+
                     String accessToken = getSharedPreferences("capacitor", MODE_PRIVATE)
                             .getString("firebase_auth_token", "");
                     if (accessToken.isEmpty()) {
@@ -378,11 +585,33 @@ public class HelpAlertActivity extends AppCompatActivity {
                         }
                     }
 
+                    String senderPhone = getSharedPreferences("capacitor", MODE_PRIVATE)
+                            .getString("current_user_phone", "");
+                    if (senderPhone.isEmpty()) {
+                        try {
+                            String senderDoc = httpGetWithAuth("https://firestore.googleapis.com/v1/projects/"
+                                    + projectId + "/databases/(default)/documents/users/" + currentUserId, accessToken);
+                            if (senderDoc != null && senderDoc.contains("stringValue")) {
+                                JSONObject senderObj = new JSONObject(senderDoc);
+                                JSONObject senderFields = senderObj.optJSONObject("fields");
+                                if (senderFields != null) {
+                                    JSONObject phoneObj = senderFields.optJSONObject("phone");
+                                    if (phoneObj != null) senderPhone = phoneObj.optString("stringValue", "");
+                                }
+                            }
+                        } catch (Exception e) {
+                            Log.w("HelpAlertActivity", "Failed to get sender phone: " + e.getMessage());
+                        }
+                    }
+
                     String alertMsg = userName + " " + ns.needsHelp() + "!\n"
                             + ns.pushTitle(dangerType) + "\n"
                             + ns.locationLabel() + ": " + locationName;
                     if (lat != 0) {
                         alertMsg += String.format(Locale.getDefault(), " (%.4f, %.4f)", lat, lng);
+                    }
+                    if (senderPhone != null && !senderPhone.isEmpty()) {
+                        alertMsg += "\n" + ns.locationLabel() + ": " + senderPhone;
                     }
 
                     String savedFcm = getSharedPreferences("capacitor", MODE_PRIVATE)
@@ -450,7 +679,7 @@ public class HelpAlertActivity extends AppCompatActivity {
                             fcmToken = fcmToken.trim().replaceAll("\\s+", "");
                             try {
                                 FcmHelper.sendPush(fcmAccessToken, fcmToken,
-                                        ns.pushTitle(dangerType), alertMsg, userName, dangerType, locationName);
+                                        ns.pushTitle(dangerType), alertMsg, userName, dangerType, locationName, null, senderPhone);
                                 fcmSent++;
                             } catch (Exception fcmErr) {
                                 fcmFailed++;
@@ -561,6 +790,10 @@ public class HelpAlertActivity extends AppCompatActivity {
         org.json.JSONObject fields = new org.json.JSONObject();
         fields.put("senderId", new org.json.JSONObject("{\"stringValue\":\"" + currentUserId + "\"}"));
         fields.put("senderName", new org.json.JSONObject("{\"stringValue\":\"" + escapeJson(userName) + "\"}"));
+        String senderPhone = getSharedPreferences("capacitor", MODE_PRIVATE).getString("current_user_phone", "");
+        if (senderPhone != null && !senderPhone.isEmpty()) {
+            fields.put("senderPhone", new org.json.JSONObject("{\"stringValue\":\"" + escapeJson(senderPhone) + "\"}"));
+        }
         fields.put("receiverIds", arrayValueObj);
         fields.put("dangerType", new org.json.JSONObject("{\"stringValue\":\"" + escapeJson(dangerType.toLowerCase()) + "\"}"));
         fields.put("alertMsg", new org.json.JSONObject("{\"stringValue\":\"" + escapeJson(alertMsg) + "\"}"));
@@ -589,8 +822,83 @@ public class HelpAlertActivity extends AppCompatActivity {
         return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "");
     }
 
+    private void openMap(String locationName, String alertMsg) {
+        String query = locationName != null && !locationName.isEmpty() ? locationName : "";
+
+        if (alertMsg != null) {
+            int lastParen = alertMsg.lastIndexOf('(');
+            if (lastParen >= 0) {
+                int closeParen = alertMsg.indexOf(')', lastParen);
+                if (closeParen > lastParen) {
+                    String coords = alertMsg.substring(lastParen + 1, closeParen);
+                    String[] parts = coords.split(",");
+                    if (parts.length == 2) {
+                        try {
+                            double lat = Double.parseDouble(parts[0].trim());
+                            double lng = Double.parseDouble(parts[1].trim());
+                            String geoUri = "geo:" + lat + "," + lng;
+                            if (!query.isEmpty()) geoUri += "?q=" + Uri.encode(query);
+                            Intent mapIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(geoUri));
+                            mapIntent.setPackage("com.google.android.apps.maps");
+                            if (mapIntent.resolveActivity(getPackageManager()) != null) {
+                                startActivity(mapIntent);
+                                return;
+                            }
+                        } catch (NumberFormatException e) {
+                        }
+                    }
+                }
+            }
+        }
+
+        if (!query.isEmpty()) {
+            String geoUri = "geo:0,0?q=" + Uri.encode(query);
+            Intent geoIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(geoUri));
+            startActivity(Intent.createChooser(geoIntent, "Open with"));
+            return;
+        }
+
+        Log.w("HelpAlertActivity", "No app can handle map intent for query: " + query);
+    }
+
+    private void playAlertSound() {
+        stopAlertSound();
+        try {
+            Uri soundUri = null;
+            int soundResId = getResources().getIdentifier("alert", "raw", getPackageName());
+            if (soundResId != 0) {
+                soundUri = Uri.parse("android.resource://" + getPackageName() + "/" + soundResId);
+            }
+            if (soundUri == null) {
+                soundUri = Settings.System.DEFAULT_NOTIFICATION_URI;
+            }
+            if (soundUri != null) {
+                alertPlayer = MediaPlayer.create(this, soundUri);
+                if (alertPlayer != null) {
+                    alertPlayer.setLooping(true);
+                    alertPlayer.start();
+                }
+            }
+        } catch (Exception e) {
+            Log.w("HelpAlertActivity", "playAlertSound failed", e);
+        }
+    }
+
+    private void stopAlertSound() {
+        soundHandler.removeCallbacks(stopSoundRunnable);
+        if (alertPlayer != null) {
+            try {
+                alertPlayer.stop();
+            } catch (Exception ignored) {
+            }
+            alertPlayer.release();
+            alertPlayer = null;
+        }
+    }
+
     @Override
     protected void onDestroy() {
+        stopAlertSound();
         super.onDestroy();
     }
 

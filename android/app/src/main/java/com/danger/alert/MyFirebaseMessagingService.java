@@ -82,6 +82,7 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
             String title = data.get("title");
             String body = data.get("body");
             String senderName = data.get("senderName");
+            String senderPhone = data.get("senderPhone");
             String dangerType = data.get("dangerType");
             String locationName = data.get("locationName");
             String alertMsg = data.get("alertMsg");
@@ -92,11 +93,12 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
                     senderName != null ? senderName : "",
                     dangerType != null ? dangerType : "unknown",
                     locationName != null ? locationName : "",
-                    alertMsg != null ? alertMsg : "");
+                    alertMsg != null ? alertMsg : "",
+                    senderPhone != null ? senderPhone : "");
         }
     }
 
-    private void showHelpFullScreen(String title, String body, String senderName, String dangerType, String locationName, String alertMsg) {
+    private void showHelpFullScreen(String title, String body, String senderName, String dangerType, String locationName, String alertMsg, String senderPhone) {
         createHelpChannel();
 
         Intent alertIntent = new Intent(this, HelpAlertActivity.class);
@@ -106,6 +108,7 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
         alertIntent.putExtra("dangerType", dangerType);
         alertIntent.putExtra("locationName", locationName);
         alertIntent.putExtra("alertMsg", alertMsg != null ? alertMsg : body);
+        alertIntent.putExtra("senderPhone", senderPhone != null ? senderPhone : "");
         alertIntent.putExtra("action", "received");
         alertIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
 

@@ -6,6 +6,7 @@ import { useLang } from '@/app/lib/LanguageProvider'
 import { useAuth } from '@/app/auth-provider'
 import { saveHelpMessage } from '@/app/lib/help-history'
 import { getUserProfile } from '@/app/lib/user-profile'
+import { Capacitor } from '@capacitor/core'
 
 function getDetectedAnswer(detail) {
   if (typeof detail === 'string') return detail
@@ -72,6 +73,8 @@ export default function DangerAlert({ detectedAnswer, confidence }) {
 
   useEffect(() => {
     const handleDangerDetected = (event) => {
+      if (Capacitor.isNativePlatform()) return
+
       const detail = event.detail || {}
       const nextAnswer = getDetectedAnswer(detail)
       const nextConfidence = getConfidence(detail)
@@ -156,6 +159,7 @@ export default function DangerAlert({ detectedAnswer, confidence }) {
         await saveHelpMessage({
           senderId: currentUser.uid,
           senderName: displayName,
+          senderPhone: user.phone || '',
           receiverIds,
           dangerType: displayAnswer,
           alertMsg: `${displayName} ${t('needsHelp')}`,
@@ -232,6 +236,7 @@ export default function DangerAlert({ detectedAnswer, confidence }) {
         await saveHelpMessage({
           senderId: currentUser.uid,
           senderName: displayName,
+          senderPhone: user.phone || '',
           receiverIds,
           dangerType: 'TROUBLE',
           alertMsg: `${displayName} ${t('needsHelp')}`,
@@ -273,7 +278,7 @@ export default function DangerAlert({ detectedAnswer, confidence }) {
           'bg-yellow-500 text-white border-yellow-400'
         }`}>
           {sendStatus === 'success' ? `✓ ${lastSend?.sent ? t('helpSentSuccess') : t('sendSuccess')}` :
-           sendStatus === 'error' ? `✗ Error: ${lastSend?.error ?? t('sendFailed')}` :
+           sendStatus === 'error' ? `✗ ${lastSend?.error ?? t('helpSentFailed')}` :
            t('sending')}
         </div>
       )}
