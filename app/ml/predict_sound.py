@@ -21,6 +21,7 @@ CNN_MODEL_PATH_PTH = os.path.join(MODEL_DIR, "danger_sound_cnn_model.pth")
 CNN_CLASSES_PATH = os.path.join(MODEL_DIR, "cnn_classes.pkl")
 CNN_SCALER_PATH = os.path.join(MODEL_DIR, "cnn_scaler_info.pkl")
 LEGACY_MODEL_PATH = os.path.join(MODEL_DIR, "danger_sound_model.pkl")
+YAMNET_MODEL_PATH = os.path.join(MODEL_DIR, "yamnet_classifier.pkl")
 
 CNN_SAMPLE_RATE = 22050
 CNN_DURATION = 3.0
@@ -31,11 +32,21 @@ CNN_IMG_HEIGHT = 128
 CNN_IMG_WIDTH = 128
 TARGET_LENGTH = int(CNN_SAMPLE_RATE * CNN_DURATION)
 
+YAMNET_SAMPLE_RATE = 16000
+YAMNET_CLIP_DURATION = 3.0
+YAMNET_TARGET_SAMPLES = int(YAMNET_SAMPLE_RATE * YAMNET_CLIP_DURATION)
+YAMNET_MODEL_DIR = os.path.join(MODEL_DIR, "yamnet_model")
+
 _cnn_model = None
 _cnn_classes = None
 _cnn_scaler_info = None
 _model_type: str | None = None
 _device = None
+
+_yamnet_model = None
+_yamnet_classifier = None
+_yamnet_classes = None
+_yamnet_scaler = None
 
 
 class DangerSoundCNN:
@@ -232,13 +243,96 @@ def _load_legacy_model() -> tuple:
     return pipeline, classes, checkpoint
 
 
+def _load_yamnet_model() -> tuple:
+    global _yamnet_model, _yamnet_classifier, _yamnet_classes, _yamnet_scaler
+
+    if _yamnet_classifier is not None:
+        return _yamnet_classifier, _yamnet_classes, _yamnet_scaler
+
+    with open(YAMNET_MODEL_PATH, "rb") as f:
+        payload = pickle.load(f)
+
+    _yamnet_classifier = payload["pipeline"]
+    _yamnet_classes = payload["classes"]
+    _yamnet_scaler = payload.get("scaler")
+
+    logger.info("YAMNet classifier loaded. Classes: %s", [str(c) for c in _yamnet_classes])
+    return _yamnet_classifier, _yamnet_classes, _yamnet_scaler
+
+
+def _get_yamnet():
+    global _yamnet_model
+    if _yamnet_model is None:
+        _yamnet_model = tf.saved_model.load(YAMNET_MODEL_DIR)
+    return _yamnet_model
+
+
+def _load_audio_for_yamnet(audio_path: str) -> np.ndarray:
+    signal, _ = librosa.load(
+        audio_path,
+        sr=YAMNET_SAMPLE_RATE,
+        mono=True,
+        duration=YAMNET_CLIP_DURATION,
+        res_type="soxr_hq",
+    )
+    if len(signal) < YAMNET_TARGET_SAMPLES:
+        signal = np.pad(signal, (0, YAMNET_TARGET_SAMPLES - len(signal)))
+    else:
+        signal = signal[:YAMNET_TARGET_SAMPLES]
+    return signal.astype(np.float32)
+
+
+def _extract_yamnet_embedding(audio_path: str) -> np.ndarray:
+    import tensorflow as tf
+
+    yamnet = _get_yamnet()
+    signal = _load_audio_for_yamnet(audio_path)
+    waveform = tf.convert_to_tensor(signal, dtype=tf.float32)
+    scores, embeddings, spectrogram = yamnet(waveform)
+    embedding = tf.reduce_mean(embeddings, axis=0).numpy()
+    return embedding.astype(np.float32)
+
+
+def _predict_yamnet(audio_path: str, debug: bool = False) -> tuple[np.ndarray, dict]:
+    classifier, classes, scaler = _load_yamnet_model()
+
+    embedding = _extract_yamnet_embedding(audio_path)
+    embedding = embedding.reshape(1, -1)
+
+    if scaler is not None:
+        embedding = scaler.transform(embedding)
+
+    probabilities = classifier.predict_proba(embedding)[0]
+
+    debug_info = {
+        "feature_version": "yamnet_1024_avg_v1",
+        "embedding_dim": int(embedding.shape[1]),
+        "sample_rate": YAMNET_SAMPLE_RATE,
+        "duration": YAMNET_CLIP_DURATION,
+        "probabilities": {
+            str(c): float(p) for c, p in zip(classes, probabilities)
+        },
+    }
+
+    return probabilities, debug_info
+
+
 def load_model() -> None:
     global _cnn_model, _cnn_classes, _cnn_scaler_info, _model_type
 
-    if _cnn_model is not None:
+    if _cnn_model is not None or _yamnet_classifier is not None:
         return
 
-    if os.path.exists(CNN_MODEL_PATH_PTH):
+    if os.path.exists(YAMNET_MODEL_PATH):
+        logger.info("Loading YAMNet classifier from %s", YAMNET_MODEL_PATH)
+        try:
+            _load_yamnet_model()
+            _model_type = "yamnet"
+            logger.info("YAMNet model loaded. Classes: %s", [str(c) for c in _yamnet_classes])
+        except Exception as exc:
+            logger.exception("Failed to load YAMNet model")
+            raise RuntimeError(f"YAMNet model loading failed: {exc}") from exc
+    elif os.path.exists(CNN_MODEL_PATH_PTH):
         logger.info("Loading PyTorch CNN model from %s", CNN_MODEL_PATH_PTH)
         try:
             _cnn_model, _cnn_classes, _cnn_scaler_info = _load_pytorch_model()
@@ -259,8 +353,8 @@ def load_model() -> None:
             raise RuntimeError(f"Legacy model loading failed: {exc}") from exc
     else:
         raise FileNotFoundError(
-            f"No model found. Expected PyTorch at {CNN_MODEL_PATH_PTH} "
-            f"or legacy at {LEGACY_MODEL_PATH}."
+            f"No model found. Expected YAMNet at {YAMNET_MODEL_PATH}, "
+            f"PyTorch at {CNN_MODEL_PATH_PTH}, or legacy at {LEGACY_MODEL_PATH}."
         )
 
 
@@ -310,7 +404,9 @@ def predict(audio_path: str) -> dict[str, Any]:
 
     audio_info = get_audio_info(audio_path)
 
-    if _model_type == "pytorch":
+    if _model_type == "yamnet":
+        probabilities, _debug = _predict_yamnet(audio_path)
+    elif _model_type == "pytorch":
         probabilities, _debug = _predict_pytorch(audio_path)
     elif _model_type == "legacy":
         probabilities = _predict_legacy(audio_path)
@@ -318,11 +414,14 @@ def predict(audio_path: str) -> dict[str, Any]:
         raise RuntimeError(f"Unknown model type: {_model_type}")
 
     predicted_idx = int(np.argmax(probabilities))
-    class_labels = [str(c) for c in _cnn_classes]
+    class_labels = [str(c) for c in (
+        _yamnet_classes if _model_type == "yamnet" else _cnn_classes
+    )]
     predicted_label = class_labels[predicted_idx]
 
     feature_version = {
         "pytorch": "cnn_mel_128x128_v2",
+        "yamnet": "yamnet_1024_avg_v1",
     }.get(_model_type, FEATURE_VERSION)
 
     return {
@@ -340,7 +439,12 @@ def predict_with_debug(audio_path: str) -> dict[str, Any]:
 
     audio_info = get_audio_info(audio_path)
 
-    if _model_type == "pytorch":
+    if _model_type == "yamnet":
+        import tensorflow as tf
+
+        probabilities, debug_info = _predict_yamnet(audio_path, debug=True)
+        feature_shape = [debug_info.get("embedding_dim", 1024)]
+    elif _model_type == "pytorch":
         import torch
 
         probabilities, debug_info = _predict_pytorch(audio_path, debug=True)
@@ -353,28 +457,30 @@ def predict_with_debug(audio_path: str) -> dict[str, Any]:
 
         features = extract_features(audio_path)
         feature_shape = list(features.shape)
-        X = np.array([features])
         debug_info = {}
 
         if hasattr(_cnn_model, "predict_proba"):
-            probabilities = _cnn_model.predict_proba(X)[0]
+            probabilities = _cnn_model.predict_proba(features.reshape(1, -1))[0]
         else:
             scaler, model = _cnn_model
-            X_scaled = scaler.transform(X)
+            X_scaled = scaler.transform(features.reshape(1, -1))
             probabilities = model.predict_proba(X_scaled)[0]
     else:
         raise RuntimeError(f"Unknown model type: {_model_type}")
 
     predicted_idx = int(np.argmax(probabilities))
-    class_labels = [str(c) for c in _cnn_classes]
+    class_labels = [str(c) for c in (
+        _yamnet_classes if _model_type == "yamnet" else _cnn_classes
+    )]
     predicted_label = class_labels[predicted_idx]
 
     warnings = []
-    if audio_info["sample_rate"] != CNN_SAMPLE_RATE:
+    if audio_info["sample_rate"] != YAMNET_SAMPLE_RATE and _model_type == "yamnet":
         warnings.append("input_sample_rate_differs_from_training_sr")
 
     feature_version = {
         "pytorch": "cnn_mel_128x128_v2",
+        "yamnet": "yamnet_1024_avg_v1",
     }.get(_model_type, FEATURE_VERSION)
 
     return {
@@ -382,7 +488,7 @@ def predict_with_debug(audio_path: str) -> dict[str, Any]:
         "feature_shape": feature_shape,
         "feature_version": feature_version,
         "model_feature_version": feature_version,
-        "model_sample_rate": CNN_SAMPLE_RATE,
+        "model_sample_rate": YAMNET_SAMPLE_RATE if _model_type == "yamnet" else CNN_SAMPLE_RATE,
         "model_classes": class_labels,
         "class_probabilities": {
             label: float(prob) for label, prob in zip(class_labels, probabilities)
