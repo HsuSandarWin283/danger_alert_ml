@@ -1,0 +1,73 @@
+============================================================
+YAMNet + sklearn CLASSIFIER TRAINING
+============================================================
+ESC-50 samples loaded: 1800
+Custom samples loaded: 1403
+Total samples before filtering: 3203
+
+=== PHASE 1: Load YAMNet ===
+YAMNet loaded.
+
+=== PHASE 2: Extract YAMNet Features ===
+  Processed 100/3203
+  Processed 200/3203
+  Processed 300/3203
+  Processed 400/3203
+  Processed 500/3203
+  Processed 600/3203
+  Processed 700/3203
+  Processed 800/3203
+  Processed 900/3203
+  Processed 1000/3203
+  Processed 1100/3203
+  Processed 1200/3203
+  Processed 1300/3203
+  Processed 1400/3203
+  Processed 1500/3203
+  Processed 1600/3203
+  Processed 1700/3203
+  Processed 1800/3203
+  Processed 1900/3203
+  Processed 2000/3203
+  Processed 2100/3203
+  Processed 2200/3203
+  Processed 2300/3203
+  Processed 2400/3203
+  Processed 2500/3203
+  Processed 2600/3203
+  Processed 2700/3203
+  Processed 2800/3203
+  Processed 2900/3203
+  Processed 3000/3203
+  Processed 3100/3203
+  Processed 3200/3203
+  Processed 3203/3203
+  Feature shape: (3203, 1545)
+
+=== PHASE 3: Train sklearn Classifier ===
+  Fold 1/5 done
+  Fold 2/5 done
+  Fold 3/5 done
+  Fold 4/5 done
+  Fold 5/5 done
+
+Confusion matrix:
+Labels: accident, glass_break, gunshot, normal, scream
+[[13, 23, 1, 8, 1], [22, 15, 0, 3, 0], [1, 2, 924, 6, 0], [21, 9, 16, 1679, 35], [0, 0, 0, 17, 407]]
+
+Classification report:
+              precision    recall  f1-score   support
+
+    accident     0.2281    0.2826    0.2524        46
+ glass_break     0.3061    0.3750    0.3371        40
+     gunshot     0.9819    0.9904    0.9861       933
+      normal     0.9802    0.9540    0.9669      1760
+      scream     0.9187    0.9599    0.9389       424
+
+    accuracy                         0.9485      3203
+   macro avg     0.6830    0.7124    0.6963      3203
+weighted avg     0.9533    0.9485    0.9507      3203
+
+
+Model saved to: D:\danger_alert_ml\app\ml\yamnet_classifier.pkl
+Total training time: 258.0s
