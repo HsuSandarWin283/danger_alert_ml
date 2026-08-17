@@ -93,9 +93,13 @@ public class NotificationStrings {
 
     public String autoSendHelp(long mins, long secs) {
         if (isMy()) {
-            return String.format("အလိုအလျောက် အကူအညီပို့ခြင်း %02d:%02d", mins, secs);
+            return String.format("အလိုအလျောက်ပေးပို့မည် %02d:%02d", mins, secs);
         }
-        return String.format("Auto-send help in %02d:%02d", mins, secs);
+        return String.format("Auto send in %d:%02d", mins, secs);
+    }
+
+    public String autoSendingHelp() {
+        return isMy() ? "အလိုအလျောက်ပေးပို့နေသည်..." : "Auto sending help...";
     }
 
     public String imOk() {

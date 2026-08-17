@@ -448,8 +448,9 @@ public class HelpAlertActivity extends AppCompatActivity {
         okBtn.setTextSize(20);
         okBtn.setBackgroundColor(Color.parseColor("#16A34A"));
         okBtn.setTextColor(Color.WHITE);
+        okBtn.setPadding(40, 40, 40, 40);
         LinearLayout.LayoutParams okLP = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 160);
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         okLP.setMargins(0, 0, 0, 24);
         okBtn.setLayoutParams(okLP);
         okBtn.setOnClickListener(new View.OnClickListener() {
@@ -466,8 +467,9 @@ public class HelpAlertActivity extends AppCompatActivity {
         helpBtn.setTextSize(20);
         helpBtn.setBackgroundColor(Color.WHITE);
         helpBtn.setTextColor(Color.parseColor("#DC2626"));
+        helpBtn.setPadding(40, 40, 40, 40);
         LinearLayout.LayoutParams helpLP = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 160);
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         helpLP.setMargins(0, 0, 0, 10);
         helpBtn.setLayoutParams(helpLP);
         helpBtn.setOnClickListener(new View.OnClickListener() {

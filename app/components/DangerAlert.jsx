@@ -283,7 +283,7 @@ export default function DangerAlert({ detectedAnswer, confidence }) {
         </div>
       )}
 
-      <div className="bg-red-500 text-white rounded-3xl shadow-lg p-8">
+      <div className="hidden bg-red-500 text-white rounded-3xl shadow-lg p-8">
         <h2 className="text-3xl font-bold mb-6">
           {t('dangerDetection')}
         </h2>
@@ -303,7 +303,14 @@ export default function DangerAlert({ detectedAnswer, confidence }) {
 
       {showOverlay && (
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/80 p-4 pt-10">
-          <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full">
+          <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full relative">
+            <button
+              onClick={() => setShowOverlay(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-2xl font-bold"
+            >
+              {t('close')}
+            </button>
+
             <div className="text-center mb-8">
               <div className="text-6xl mb-4">⚠️</div>
               <h2 className="text-3xl font-bold text-gray-900 mb-2">
@@ -317,17 +324,17 @@ export default function DangerAlert({ detectedAnswer, confidence }) {
               </p>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-4">
               <button
                 onClick={handleImOk}
-                className="w-full bg-green-500 text-white py-4 rounded-xl text-lg font-semibold hover:bg-green-600 transition active:scale-95"
+                className="w-full bg-green-500 text-white py-5 rounded-xl text-xl font-semibold hover:bg-green-600 transition active:scale-95"
               >
                 {t('imOk')}
               </button>
               <button
                 onClick={handleSendHelp}
                 disabled={sending}
-                className="w-full bg-red-500 text-white py-4 rounded-xl text-lg font-semibold hover:bg-red-600 transition active:scale-95 disabled:opacity-50"
+                className="w-full bg-red-500 text-white py-5 rounded-xl text-xl font-semibold hover:bg-red-600 transition active:scale-95 disabled:opacity-50"
               >
                 {sending ? t('sending') : t('imNotOkSendHelp')}
               </button>
