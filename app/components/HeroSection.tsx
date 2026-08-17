@@ -17,11 +17,11 @@ export default function HeroSection() {
 
   return (
     <section className="text-center py-16 px-6 bg-gradient-to-r from-black to-gray-800 text-white">
-      <h1 className="text-5xl font-bold mb-6">
+      <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-6 leading-[1.75] drop-shadow-lg">
         {t('heroTitle')}
       </h1>
 
-      <p className="text-lg max-w-3xl mx-auto text-gray-300">
+      <p className="text-base sm:text-lg max-w-3xl mx-auto text-gray-300 leading-relaxed">
         {t('heroDesc')}
       </p>
 

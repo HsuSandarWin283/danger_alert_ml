@@ -116,6 +116,7 @@ public class DangerAlertActivity extends AppCompatActivity {
 
         buildUI();
         playAlertSound();
+        startCountdown();
     }
 
     private void buildTroubleUI(String senderName, String alertMsg) {
@@ -211,6 +212,15 @@ public class DangerAlertActivity extends AppCompatActivity {
         message.setPadding(0, 10, 0, 40);
         rootLayout.addView(message);
 
+        TextView countdownView = new TextView(this);
+        countdownView.setTag("countdown");
+        countdownView.setText("Auto send in 2:00");
+        countdownView.setTextColor(Color.WHITE);
+        countdownView.setTextSize(18);
+        countdownView.setGravity(Gravity.CENTER);
+        countdownView.setPadding(0, 0, 0, 24);
+        rootLayout.addView(countdownView);
+
         Button okBtn = new Button(this);
         okBtn.setText(ns.imOk());
         okBtn.setTextSize(20);
@@ -223,6 +233,7 @@ public class DangerAlertActivity extends AppCompatActivity {
         okBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                if (timer != null) timer.cancel();
                 stopAlertSound();
                 finish();
             }
@@ -241,6 +252,7 @@ public class DangerAlertActivity extends AppCompatActivity {
         helpBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                if (timer != null) timer.cancel();
                 stopAlertSound();
                 onSendHelp();
             }
@@ -258,6 +270,33 @@ public class DangerAlertActivity extends AppCompatActivity {
         NotificationStrings ns = new NotificationStrings(this);
         showResult(ns.sendingHelpRequest());
         sendHelpWithLocation();
+    }
+
+    private void startCountdown() {
+        if (timer != null) timer.cancel();
+
+        final TextView countdownView = rootLayout != null ? (TextView) rootLayout.findViewWithTag("countdown") : null;
+
+        timer = new CountDownTimer(120000, 1000) {
+            @Override
+            public void onTick(long millisUntilFinished) {
+                int seconds = (int) (millisUntilFinished / 1000);
+                int minutes = seconds / 60;
+                int secs = seconds % 60;
+                String text = String.format("Auto send in %d:%02d", minutes, secs);
+                if (countdownView != null) {
+                    countdownView.setText(text);
+                }
+            }
+
+            @Override
+            public void onFinish() {
+                if (countdownView != null) {
+                    countdownView.setText("Auto sending help...");
+                }
+                onSendHelp();
+            }
+        }.start();
     }
 
     private void sendHelpWithLocation() {
@@ -855,8 +894,8 @@ public class DangerAlertActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
-        stopAlertSound();
         if (timer != null) timer.cancel();
+        stopAlertSound();
         super.onDestroy();
     }
 
