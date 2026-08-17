@@ -30,10 +30,11 @@ YAMNET_MODEL_DIR = ML_DIR / "yamnet_model"
 YAMNET_SAMPLE_RATE = 16000
 CLIP_DURATION = 3.0
 TARGET_SAMPLES = int(YAMNET_SAMPLE_RATE * CLIP_DURATION)
-CLIP_DURATION = 3.0
-TARGET_SAMPLES = int(YAMNET_SAMPLE_RATE * CLIP_DURATION)
 
 AUDIO_EXTENSIONS = {".wav", ".mp3", ".ogg", ".flac"}
+
+YAMNET_NUM_CLASSES = 521
+USE_HYBRID_FEATURES = True
 
 CUSTOM_CLASS_FOLDERS = {
     "gunshot": "gun_shot",
@@ -87,11 +88,35 @@ def load_yamnet():
     return tf.saved_model.load(str(YAMNET_MODEL_DIR))
 
 
-def extract_yamnet_embedding(yamnet, signal: np.ndarray) -> np.ndarray:
+def extract_yamnet_features(yamnet, signal: np.ndarray) -> np.ndarray:
     waveform = tf.convert_to_tensor(signal, dtype=tf.float32)
     scores, embeddings, spectrogram = yamnet(waveform)
-    embedding = tf.reduce_mean(embeddings, axis=0).numpy()
-    return embedding.astype(np.float32)
+    clip_scores = tf.reduce_mean(scores, axis=0).numpy()
+    features = clip_scores.astype(np.float32)
+    if USE_HYBRID_FEATURES:
+        clip_embeddings = tf.reduce_mean(embeddings, axis=0).numpy().astype(np.float32)
+        features = np.concatenate([features, clip_embeddings])
+    return features
+
+
+YAMNET_CLASS_MAP = {
+    11: "scream",
+    421: "gunshot",
+    437: "accident",
+    463: "accident",
+}
+
+
+def predict_by_rules(yamnet, signal: np.ndarray, threshold: float = 0.3) -> str | None:
+    waveform = tf.convert_to_tensor(signal, dtype=tf.float32)
+    scores, embeddings, spectrogram = yamnet(waveform)
+    clip_scores = tf.reduce_mean(scores, axis=0).numpy()
+    best_idx = int(np.argmax(clip_scores))
+    best_score = float(clip_scores[best_idx])
+    label = YAMNET_CLASS_MAP.get(best_idx)
+    if label is not None and best_score >= threshold:
+        return label
+    return None
 
 
 def load_esc50_samples() -> list[dict]:
@@ -211,8 +236,8 @@ def main() -> None:
     yamnet = load_yamnet()
     log("YAMNet loaded.", lines)
 
-    log("\n=== PHASE 2: Extract YAMNet Embeddings ===", lines)
-    embeddings = []
+    log("\n=== PHASE 2: Extract YAMNet Features ===", lines)
+    features_list = []
     labels = []
     groups = []
     failed = []
@@ -224,8 +249,8 @@ def main() -> None:
             continue
 
         try:
-            emb = extract_yamnet_embedding(yamnet, signal)
-            embeddings.append(emb)
+            feats = extract_yamnet_features(yamnet, signal)
+            features_list.append(feats)
             labels.append(sample["label"])
             groups.append(sample["group"])
         except Exception as exc:
@@ -235,21 +260,21 @@ def main() -> None:
             log(f"  Processed {idx}/{len(all_samples)}", lines)
 
     if failed:
-        log(f"  Failed embeddings: {len(failed)} files")
+        log(f"  Failed features: {len(failed)} files")
         for item in failed[:20]:
             log(f"    {item}")
         if len(failed) > 20:
             log(f"    ... {len(failed) - 20} more")
     else:
-        log("  Failed embeddings: 0 files")
+        log("  Failed features: 0 files")
 
-    if not embeddings:
-        raise RuntimeError("No valid embeddings extracted.")
+    if not features_list:
+        raise RuntimeError("No valid features extracted.")
 
-    X = np.vstack(embeddings).astype(np.float32)
+    X = np.vstack(features_list).astype(np.float32)
     y = np.array(labels)
     groups = np.array(groups)
-    log(f"  Embedding shape: {X.shape}", lines)
+    log(f"  Feature shape: {X.shape}", lines)
 
     log("\n=== PHASE 3: Train sklearn Classifier ===", lines)
     scaler = StandardScaler()
@@ -290,6 +315,8 @@ def main() -> None:
     final_pipeline = make_pipeline()
     final_pipeline.fit(X_scaled, y_encoded)
 
+    feature_version = "yamnet_521_scores_v1" if not USE_HYBRID_FEATURES else "yamnet_521_1024_hybrid_v1"
+
     payload = {
         "pipeline": final_pipeline,
         "scaler": scaler,
@@ -297,7 +324,7 @@ def main() -> None:
         "embedding_dim": X.shape[1],
         "sample_rate": YAMNET_SAMPLE_RATE,
         "duration": CLIP_DURATION,
-        "feature_version": "yamnet_1024_avg_v1",
+        "feature_version": feature_version,
         "training_label_counts": dict(Counter(y)),
         "failed_files": failed,
     }

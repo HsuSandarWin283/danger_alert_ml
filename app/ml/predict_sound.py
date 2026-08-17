@@ -263,6 +263,7 @@ def _load_yamnet_model() -> tuple:
 def _get_yamnet():
     global _yamnet_model
     if _yamnet_model is None:
+        import tensorflow as tf
         _yamnet_model = tf.saved_model.load(YAMNET_MODEL_DIR)
     return _yamnet_model
 
@@ -282,37 +283,84 @@ def _load_audio_for_yamnet(audio_path: str) -> np.ndarray:
     return signal.astype(np.float32)
 
 
-def _extract_yamnet_embedding(audio_path: str) -> np.ndarray:
+def _extract_yamnet_features(audio_path: str) -> np.ndarray:
     import tensorflow as tf
 
     yamnet = _get_yamnet()
     signal = _load_audio_for_yamnet(audio_path)
     waveform = tf.convert_to_tensor(signal, dtype=tf.float32)
     scores, embeddings, spectrogram = yamnet(waveform)
-    embedding = tf.reduce_mean(embeddings, axis=0).numpy()
-    return embedding.astype(np.float32)
+    clip_scores = tf.reduce_mean(scores, axis=0).numpy()
+    features = clip_scores.astype(np.float32)
+    if os.path.exists(os.path.join(YAMNET_MODEL_DIR, "..", "yamnet_classifier.pkl")):
+        try:
+            with open(os.path.join(YAMNET_MODEL_DIR, "..", "yamnet_classifier.pkl"), "rb") as f:
+                payload = pickle.load(f)
+            if payload.get("embedding_dim", 521) > 521:
+                clip_embeddings = tf.reduce_mean(embeddings, axis=0).numpy().astype(np.float32)
+                features = np.concatenate([features, clip_embeddings])
+        except Exception:
+            pass
+    return features
+
+
+YAMNET_CLASS_MAP = {
+    11: "scream",
+    421: "gunshot",
+    437: "accident",
+    463: "accident",
+}
+
+
+def _predict_yamnet_by_rules(audio_path: str, threshold: float = 0.3) -> tuple[str | None, dict]:
+    import tensorflow as tf
+
+    yamnet = _get_yamnet()
+    signal = _load_audio_for_yamnet(audio_path)
+    waveform = tf.convert_to_tensor(signal, dtype=tf.float32)
+    scores, embeddings, spectrogram = yamnet(waveform)
+    clip_scores = tf.reduce_mean(scores, axis=0).numpy()
+    best_idx = int(np.argmax(clip_scores))
+    best_score = float(clip_scores[best_idx])
+    label = YAMNET_CLASS_MAP.get(best_idx)
+    debug_info = {
+        "rule_based": True,
+        "yamnet_top_index": best_idx,
+        "yamnet_top_score": best_score,
+        "yamnet_top_class": str(best_idx),
+    }
+    if label is not None and best_score >= threshold:
+        return label, debug_info
+    return None, debug_info
 
 
 def _predict_yamnet(audio_path: str, debug: bool = False) -> tuple[np.ndarray, dict]:
     classifier, classes, scaler = _load_yamnet_model()
 
-    embedding = _extract_yamnet_embedding(audio_path)
-    embedding = embedding.reshape(1, -1)
+    rule_label, rule_debug = _predict_yamnet_by_rules(audio_path)
+    features = _extract_yamnet_features(audio_path)
+    features = features.reshape(1, -1)
 
     if scaler is not None:
-        embedding = scaler.transform(embedding)
+        features = scaler.transform(features)
 
-    probabilities = classifier.predict_proba(embedding)[0]
+    probabilities = classifier.predict_proba(features)[0]
 
     debug_info = {
-        "feature_version": "yamnet_1024_avg_v1",
-        "embedding_dim": int(embedding.shape[1]),
+        "feature_version": "yamnet_521_scores_v1",
+        "feature_dim": int(features.shape[1]),
         "sample_rate": YAMNET_SAMPLE_RATE,
         "duration": YAMNET_CLIP_DURATION,
         "probabilities": {
             str(c): float(p) for c, p in zip(classes, probabilities)
         },
+        "rule_based": rule_debug,
     }
+
+    if rule_label is not None:
+        rule_idx = classes.index(rule_label) if rule_label in classes else -1
+        if rule_idx >= 0:
+            probabilities[rule_idx] = max(probabilities[rule_idx], float(rule_debug.get("yamnet_top_score", 0.5)))
 
     return probabilities, debug_info
 
@@ -421,7 +469,7 @@ def predict(audio_path: str) -> dict[str, Any]:
 
     feature_version = {
         "pytorch": "cnn_mel_128x128_v2",
-        "yamnet": "yamnet_1024_avg_v1",
+        "yamnet": "yamnet_521_scores_v1",
     }.get(_model_type, FEATURE_VERSION)
 
     return {
@@ -443,7 +491,7 @@ def predict_with_debug(audio_path: str) -> dict[str, Any]:
         import tensorflow as tf
 
         probabilities, debug_info = _predict_yamnet(audio_path, debug=True)
-        feature_shape = [debug_info.get("embedding_dim", 1024)]
+        feature_shape = [debug_info.get("feature_dim", 521)]
     elif _model_type == "pytorch":
         import torch
 
@@ -480,7 +528,7 @@ def predict_with_debug(audio_path: str) -> dict[str, Any]:
 
     feature_version = {
         "pytorch": "cnn_mel_128x128_v2",
-        "yamnet": "yamnet_1024_avg_v1",
+        "yamnet": "yamnet_521_scores_v1",
     }.get(_model_type, FEATURE_VERSION)
 
     return {
