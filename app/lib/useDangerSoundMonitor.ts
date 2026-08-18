@@ -39,7 +39,7 @@ type UseDangerSoundMonitorReturn = {
   stopMonitoring: () => void;
 };
 
-const DEFAULT_PREDICT_URL = 'https://danger-alert-ml.onrender.com/predict';
+const DEFAULT_PREDICT_URL = 'https://danger-alert-to-trusted.onrender.com/predict';
 const CHUNK_MS = 3000;
 const RMS_CHECK_MS = 200;
 const SCRIPT_PROCESSOR_BUFFER_SIZE = 4096;
