@@ -34,6 +34,10 @@ try:
         if _firebase_initialized:
             return
         sa_path = Path(__file__).resolve().parent / "app" / "ml" / "service-account.json"
+        if not sa_path.exists():
+            env_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+            if env_path and Path(env_path).exists():
+                sa_path = Path(env_path)
         if sa_path.exists():
             cred = credentials.Certificate(str(sa_path))
             firebase_admin.initialize_app(cred)
