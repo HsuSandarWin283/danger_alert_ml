@@ -43,7 +43,23 @@ next-env.d.ts
 # Python
 .venv/
 venv/
+.venv311/
 __pycache__/
+
+# Generated training outputs
+*.png
+*.jpg
+*.jpeg
+*.gif
+*_report.txt
+*_training_report.txt
+
+# Backup files
+*.bak
+*.backup
+
+# Kilo
+.kilo/
 
 # Dataset
 *.zip
