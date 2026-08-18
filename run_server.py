@@ -38,6 +38,10 @@ try:
             env_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
             if env_path and Path(env_path).exists():
                 sa_path = Path(env_path)
+        if not sa_path.exists():
+            secret_path = Path("/etc/secrets/service-account.json")
+            if secret_path.exists():
+                sa_path = secret_path
         if sa_path.exists():
             cred = credentials.Certificate(str(sa_path))
             firebase_admin.initialize_app(cred)
