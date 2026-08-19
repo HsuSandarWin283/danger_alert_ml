@@ -39,7 +39,7 @@ type UseDangerSoundMonitorReturn = {
   stopMonitoring: () => void;
 };
 
-const DEFAULT_PREDICT_URL = 'https://danger-alert-to-trusted.onrender.com/predict';
+const DEFAULT_PREDICT_URL = 'http://192.168.100.146:8000/predict';
 const CHUNK_MS = 3000;
 const RMS_CHECK_MS = 200;
 const SCRIPT_PROCESSOR_BUFFER_SIZE = 4096;

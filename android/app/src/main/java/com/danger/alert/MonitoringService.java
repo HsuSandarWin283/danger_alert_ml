@@ -48,7 +48,7 @@ public class MonitoringService extends Service {
     private static final int ALERT_NOTIFICATION_ID = 2001;
     private static final int SAMPLE_RATE = 22050;
     private static final int DURATION_SECONDS = 5;
-    private static final String DEFAULT_API_URL = "https://danger-alert-ml.onrender.com";
+    private static final String DEFAULT_API_URL = "http://192.168.100.146:8000";
     private static final long KEEPALIVE_INTERVAL_MS = 4 * 60 * 1000;
 
     private AudioRecord audioRecord;
