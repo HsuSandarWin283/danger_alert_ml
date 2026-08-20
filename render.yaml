@@ -2,9 +2,11 @@ services:
   - type: web
     name: danger-alert-ml
     runtime: python
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install -r app/ml/requirements.txt
     startCommand: python run_server.py
     healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
         value: "3.11"
+      - key: GOOGLE_APPLICATION_CREDENTIALS
+        value: app/ml/service-account.json

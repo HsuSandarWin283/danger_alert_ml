@@ -6,7 +6,7 @@ import pickle
 import random
 import time
 import warnings
-from collections import Counter, defaultdict
+from collections import Counter
 from pathlib import Path
 
 import numpy as np
@@ -15,6 +15,44 @@ try:
     import librosa
 except ImportError:
     raise ImportError("librosa is required: pip install librosa")
+
+_FFMPEG_DIR = Path(r"C:\Users\Hsu Sandar Win\AppData\Local\Python\ffmpeg\ffmpeg-9.0-essentials_build\bin")
+if _FFMPEG_DIR.exists():
+    os.environ["PATH"] = str(_FFMPEG_DIR) + os.pathsep + os.environ.get("PATH", "")
+# On Colab / Linux, ffmpeg is already in PATH
+
+_IN_COLAB = False
+try:
+    import google.colab
+    _IN_COLAB = True
+except ImportError:
+    pass
+
+if _IN_COLAB:
+    script_path = Path(__file__).resolve()
+    project_root = script_path.parents[2]
+
+    APP_DIR = project_root / 'app'
+    ML_DIR = APP_DIR / 'ml'
+    CUSTOM_DATASET_DIR = project_root / 'dataset'
+
+    for esc50_candidate in [
+        CUSTOM_DATASET_DIR / 'ESC-50',
+        APP_DIR / 'database' / 'ESC-50-master',
+    ]:
+        if esc50_candidate.exists():
+            ESC50_DIR = esc50_candidate
+            break
+    else:
+        ESC50_DIR = CUSTOM_DATASET_DIR / 'ESC-50'
+else:
+    APP_DIR = Path(__file__).resolve().parents[1]
+    ML_DIR = Path(__file__).resolve().parent
+    CUSTOM_DATASET_DIR = APP_DIR / "dataset"
+    ESC50_DIR = APP_DIR / "database" / "ESC-50-master"
+
+META_FILE = ESC50_DIR / "meta" / "esc50.csv"
+AUDIO_DIR = ESC50_DIR / "audio"
 
 try:
     import torch
@@ -31,7 +69,6 @@ from sklearn.metrics import (
     precision_score,
     recall_score,
 )
-from sklearn.model_selection import StratifiedGroupKFold
 
 matplotlib_available = False
 try:
@@ -39,7 +76,6 @@ try:
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    import matplotlib.ticker as mticker
 
     matplotlib_available = True
 except ImportError:
@@ -55,12 +91,12 @@ AUDIO_DIR = ESC50_DIR / "audio"
 OUTPUT_MODEL_PATH = ML_DIR / "danger_sound_cnn_model.pth"
 OUTPUT_CLASSES_PATH = ML_DIR / "cnn_classes.pkl"
 OUTPUT_SCALER_PATH = ML_DIR / "cnn_scaler_info.pkl"
-OUTPUT_REPORT_PATH = ML_DIR / "augmented_training_report.txt"
+OUTPUT_REPORT_PATH = ML_DIR / "training_report.txt"
 OUTPUT_CM_IMAGE = ML_DIR / "confusion_matrix.png"
 OUTPUT_CURVES_IMAGE = ML_DIR / "training_curves.png"
 
 SAMPLE_RATE = 22050
-DURATION = 5.0
+DURATION = 3.0
 N_MELS = 128
 N_FFT = 2048
 HOP_LENGTH = 512
@@ -68,15 +104,7 @@ IMG_HEIGHT = 128
 IMG_WIDTH = 128
 TARGET_LENGTH = int(SAMPLE_RATE * DURATION)
 
-SNR_RANGE = (5.0, 20.0)
-VOLUME_RANGE = (0.5, 1.5)
 AUDIO_EXTENSIONS = {".wav", ".mp3", ".ogg", ".flac", ".m4a"}
-
-CLASS_TARGETS = {
-    "gunshot": 1100,
-    "scream": 600,
-    "accident": 500,
-}
 
 BG_CATEGORIES = [
     "rain", "wind", "engine", "thunderstorm", "sea_waves",
@@ -87,9 +115,14 @@ BG_CATEGORIES = [
 
 ACCIDENT_SOUND_CATEGORIES = ["glass_breaking", "car_horn"]
 DANGER_EXCLUDED_CATEGORIES = {
-    "glass_breaking", "car_horn", "siren", "chainsaw",
-    "fireworks", "crying_baby",
+    "gunshot", "siren", "chainsaw", "fireworks", "crying_baby",
+    "glass_breaking", "car_horn",
 }
+
+NORMAL_SAMPLE_COUNT = 400
+MIX_PROB = 0.7
+SNR_RANGE = (5.0, 20.0)
+VOLUME_RANGE = (0.8, 1.2)
 
 random.seed(42)
 np.random.seed(42)
@@ -104,13 +137,19 @@ def log(msg: str, lines: list[str] | None = None) -> None:
 
 def load_audio_file(path: Path) -> np.ndarray | None:
     try:
-        signal, _ = librosa.load(str(path), sr=SAMPLE_RATE, mono=True, duration=DURATION)
+        signal, _ = librosa.load(str(path), sr=SAMPLE_RATE, mono=True, duration=DURATION, res_type="soxr_hq")
         if len(signal) < TARGET_LENGTH:
             signal = np.pad(signal, (0, TARGET_LENGTH - len(signal)))
         else:
             signal = signal[:TARGET_LENGTH]
+
+        peak = np.max(np.abs(signal))
+        if peak > 0:
+            signal = signal / peak * 0.95
+
         return signal
-    except Exception:
+    except Exception as exc:
+        print(f"FAILED LOAD: {path} | {type(exc).__name__}: {exc}", flush=True)
         return None
 
 
@@ -138,7 +177,7 @@ def mix_two_signals(
         bg = np.tile(bg, (len(fg) // bg_len) + 1)
 
     safe_offset = bg_offset % max(1, len(bg) - len(fg))
-    bg_chunk = bg[safe_offset : safe_offset + len(fg)].copy()
+    bg_chunk = bg[safe_offset: safe_offset + len(fg)].copy()
 
     bg_rms = compute_rms(bg_chunk)
     if bg_rms < 1e-8:
@@ -152,19 +191,6 @@ def mix_two_signals(
     if peak > 0.99:
         mixed *= 0.99 / peak
     return mixed
-
-
-def mix_multi_signals(signals: list[np.ndarray], snr_db: float, fg_volume: float) -> np.ndarray:
-    if len(signals) == 0:
-        return np.zeros(TARGET_LENGTH, dtype=np.float32)
-    if len(signals) == 1:
-        return signals[0] * fg_volume
-
-    result = signals[0] * fg_volume
-    for i in range(1, len(signals)):
-        bg_offset = random.randint(0, max(0, len(signals[i]) - len(result)))
-        result = mix_two_signals(result, signals[i], snr_db, 1.0, bg_offset)
-    return result
 
 
 def random_bg_offset(bg_length: int) -> int:
@@ -212,34 +238,76 @@ def collect_accident_subdir_files() -> dict[str, list[Path]]:
     return result
 
 
-class MelSpectrogramDataset(Dataset):
+def select_normal_files(esc50: dict[str, list[Path]], target_count: int = NORMAL_SAMPLE_COUNT) -> list[Path]:
+    normal_paths: list[Path] = []
+    for cat, files in esc50.items():
+        if cat not in DANGER_EXCLUDED_CATEGORIES and cat not in BG_CATEGORIES:
+            normal_paths.extend(files)
+    random.shuffle(normal_paths)
+    sampled = normal_paths[:target_count]
+    return sampled
+
+
+class OnTheFlyAudioDataset(Dataset):
     def __init__(
         self,
-        mels: np.ndarray,
-        labels: np.ndarray,
+        data: list[tuple[np.ndarray, str, str]],
+        bg_signals: list[np.ndarray],
+        accident_signals: dict[str, list[np.ndarray]],
+        classes: list[str],
+        class_to_idx: dict[str, int],
+        mean_val: float,
+        std_val: float,
         augment: bool = False,
+        mix_prob: float = MIX_PROB,
     ):
-        self.mels = torch.tensor(mels, dtype=torch.float32).unsqueeze(1)
-        self.labels = torch.tensor(labels, dtype=torch.long)
+        self.data = data
+        self.bg_signals = bg_signals
+        self.accident_signals = accident_signals
+        self.classes = classes
+        self.class_to_idx = class_to_idx
+        self.mean_val = mean_val
+        self.std_val = std_val
         self.augment = augment
+        self.mix_prob = mix_prob
 
     def __len__(self):
-        return len(self.labels)
+        return len(self.data)
 
     def __getitem__(self, idx):
-        x = self.mels[idx]
-        y = self.labels[idx]
-        if self.augment:
-            x = self._apply_augmentation(x)
-        return x, y
+        signal, label, src = self.data[idx]
 
-    def _apply_augmentation(self, x: torch.Tensor) -> torch.Tensor:
+        if self.augment:
+            signal = self._augment(signal, label)
+
+        mel = audio_to_mel(signal)
+        mel = (mel - self.mean_val) / self.std_val
+        mel_tensor = torch.tensor(mel, dtype=torch.float32).unsqueeze(0)
+        label_idx = self.class_to_idx[label]
+
+        return mel_tensor, torch.tensor(label_idx, dtype=torch.long)
+
+    def _augment(self, signal: np.ndarray, label: str) -> np.ndarray:
         if random.random() < 0.3:
-            noise = torch.randn_like(x) * 0.02
-            x = x + noise
-        if random.random() < 0.2:
-            x = x * random.uniform(0.8, 1.2)
-        return x
+            signal = signal * random.uniform(0.8, 1.2)
+
+        if random.random() < 0.3:
+            shift = random.randint(-2205, 2205)
+            signal = np.roll(signal, shift)
+            if shift > 0:
+                signal[:shift] = 0
+            else:
+                signal[shift:] = 0
+
+        if label != "normal" and random.random() < self.mix_prob:
+            if self.bg_signals:
+                bg_sig = random.choice(self.bg_signals)
+                snr_db = random.uniform(*SNR_RANGE)
+                vol = random.uniform(*VOLUME_RANGE)
+                offset = random_bg_offset(len(bg_sig))
+                signal = mix_two_signals(signal, bg_sig, snr_db, vol, offset)
+
+        return signal
 
 
 class DangerSoundCNN(nn.Module):
@@ -300,6 +368,7 @@ def audio_to_mel(signal: np.ndarray) -> np.ndarray:
         n_fft=N_FFT, hop_length=HOP_LENGTH,
     )
     mel_db = librosa.power_to_db(mel, ref=np.max)
+    mel_db = np.clip(mel_db, -80.0, 0.0)
     from scipy.ndimage import zoom
     zh = IMG_HEIGHT / mel_db.shape[0]
     zw = IMG_WIDTH / mel_db.shape[1]
@@ -366,25 +435,89 @@ def plot_training_curves(history, path):
     log(f"Training curves saved: {path}")
 
 
+def evaluate_model(model, dataloader, device, classes):
+    model.eval()
+    all_preds = []
+    all_true = []
+    total_loss = 0.0
+    total_correct = 0
+    total_samples = 0
+
+    criterion = nn.CrossEntropyLoss()
+
+    with torch.no_grad():
+        for bx, by in dataloader:
+            bx, by = bx.to(device), by.to(device)
+            out = model(bx)
+            loss = criterion(out, by)
+            total_loss += loss.item() * bx.size(0)
+            preds = out.argmax(1)
+            total_correct += preds.eq(by).sum().item()
+            total_samples += bx.size(0)
+            all_preds.extend(preds.cpu().numpy())
+            all_true.extend(by.cpu().numpy())
+
+    avg_loss = total_loss / total_samples if total_samples > 0 else 0.0
+    accuracy = total_correct / total_samples if total_samples > 0 else 0.0
+
+    report = classification_report(
+        all_true, all_preds, target_names=classes, digits=4, zero_division=0,
+    )
+    cm = confusion_matrix(all_true, all_preds)
+
+    per_class = {}
+    for i, cls in enumerate(classes):
+        mask_i = np.array(all_true) == i
+        total_i = int(np.sum(mask_i))
+        correct_i = int(np.sum((np.array(all_true) == i) & (np.array(all_preds) == i)))
+        recall_i = correct_i / total_i if total_i > 0 else 0
+
+        pred_mask_i = np.array(all_preds) == i
+        tp = int(np.sum((np.array(all_true) == i) & (np.array(all_preds) == i)))
+        fp = int(np.sum((np.array(all_true) != i) & (np.array(all_preds) == i)))
+        precision_i = tp / (tp + fp) if (tp + fp) > 0 else 0
+        f1_i = 2 * precision_i * recall_i / (precision_i + recall_i) if (precision_i + recall_i) > 0 else 0
+
+        per_class[cls] = {
+            "precision": precision_i,
+            "recall": recall_i,
+            "f1": f1_i,
+            "support": total_i,
+        }
+
+    return {
+        "loss": avg_loss,
+        "accuracy": accuracy,
+        "report": report,
+        "confusion_matrix": cm,
+        "per_class": per_class,
+        "predictions": np.array(all_preds),
+        "true": np.array(all_true),
+    }
+
+
 def main() -> None:
     lines: list[str] = []
     t_start = time.time()
 
     log("=" * 60, lines)
-    log("DANGER SOUND CNN TRAINING WITH AUGMENTATION (PyTorch)", lines)
+    log("DANGER SOUND CNN TRAINING (PyTorch)", lines)
+    log("Original Dataset + On-The-Fly Augmentation", lines)
     log("=" * 60, lines)
 
     esc50 = load_esc50_by_category()
     log(f"ESC-50 categories loaded: {len(esc50)}", lines)
 
-    gunshot_paths = collect_custom_files("gun_shot")
-    scream_paths = collect_custom_files("scream")
-    accident_subdirs = collect_accident_subdir_files()
-    accident_paths = [p for files in accident_subdirs.values() for p in files]
+    gunshot_paths = collect_custom_files("Gunshot")
+    scream_paths = collect_custom_files("Scream")
+    accident_paths = collect_custom_files("Accident")
 
     log(f"Gunshot files: {len(gunshot_paths)}", lines)
     log(f"Scream files: {len(scream_paths)}", lines)
     log(f"Accident files: {len(accident_paths)}", lines)
+
+    normal_paths = select_normal_files(esc50, NORMAL_SAMPLE_COUNT)
+    log(f"Selected Normal files (ESC-50): {len(normal_paths)}", lines)
 
     bg_pool: list[Path] = []
     for cat in BG_CATEGORIES:
@@ -396,13 +529,7 @@ def main() -> None:
         accident_sound_pool.extend(esc50.get(cat, []))
     log(f"Accident sound pool (glass_breaking + car_horn): {len(accident_sound_pool)} files", lines)
 
-    normal_paths: list[Path] = []
-    for cat, files in esc50.items():
-        if cat not in DANGER_EXCLUDED_CATEGORIES and cat not in BG_CATEGORIES:
-            normal_paths.extend(files)
-    log(f"Normal pool (ESC-50): {len(normal_paths)} files", lines)
-
-    log("\n=== PHASE 1: Load audio into memory ===", lines)
+    log("\n=== PHASE 1: Load original audio into memory ===", lines)
 
     def load_batch(paths: list[Path], label: str) -> list[tuple[np.ndarray, str, str]]:
         results: list[tuple[np.ndarray, str, str]] = []
@@ -411,7 +538,7 @@ def main() -> None:
             sig = load_audio_file(p)
             if sig is not None:
                 results.append((sig, label, str(p)))
-            if (i + 1) % 200 == 0:
+            if (i + 1) % 100 == 0:
                 log(f"  [{label}] {i + 1}/{len(paths)} ({time.time() - t0:.1f}s)", lines)
         log(f"  [{label}] loaded {len(results)}/{len(paths)} ({time.time() - t0:.1f}s)", lines)
         return results
@@ -419,6 +546,7 @@ def main() -> None:
     gunshot_originals = load_batch(gunshot_paths, "gunshot")
     scream_originals = load_batch(scream_paths, "scream")
     accident_originals = load_batch(accident_paths, "accident")
+    normal_originals = load_batch(normal_paths, "normal")
 
     bg_loaded: dict[str, list[np.ndarray]] = {}
     for cat in BG_CATEGORIES:
@@ -441,198 +569,140 @@ def main() -> None:
         if sigs:
             accident_sound_loaded[cat] = sigs
 
-    accident_subdir_loaded: dict[str, list[np.ndarray]] = {}
-    for subdir_name, paths in accident_subdirs.items():
-        sigs = []
-        for p in paths:
-            s = load_audio_file(p)
-            if s is not None:
-                sigs.append(s)
-        if sigs:
-            accident_subdir_loaded[subdir_name] = sigs
-
-    normal_sampled = random.sample(normal_paths, min(1200, len(normal_paths)))
-    normal_originals = load_batch(normal_sampled, "normal")
-
     bg_flat: list[np.ndarray] = []
     for sigs in bg_loaded.values():
         bg_flat.extend(sigs)
     log(f"  Total background signals: {len(bg_flat)}", lines)
 
-    log("\n=== PHASE 2: Data Augmentation ===", lines)
+    log("\n=== DATASET VALIDATION ===", lines)
+    log(f"Resolved paths:", lines)
+    log(f"  APP_DIR: {APP_DIR}", lines)
+    log(f"  ML_DIR: {ML_DIR}", lines)
+    log(f"  CUSTOM_DATASET_DIR: {CUSTOM_DATASET_DIR}", lines)
+    log(f"  ESC50_DIR: {ESC50_DIR}", lines)
+    log(f"  META_FILE: {META_FILE}", lines)
+    log(f"  META_FILE exists: {META_FILE.exists()}", lines)
 
-    all_data: list[tuple[np.ndarray, str, str, str]] = []
+    total_danger = len(gunshot_originals) + len(scream_originals) + len(accident_originals)
+    total_originals = total_danger + len(normal_originals)
 
-    def pick_random_bg() -> np.ndarray:
-        return random.choice(bg_flat)
+    log(f"\nDataset counts:", lines)
+    log(f"  Gunshot: {len(gunshot_originals)}", lines)
+    log(f"  Scream: {len(scream_originals)}", lines)
+    log(f"  Accident: {len(accident_originals)}", lines)
+    log(f"  Normal: {len(normal_originals)}", lines)
+    log(f"  Total danger originals: {total_danger}", lines)
+    log(f"  Total training originals: {total_originals}", lines)
 
-    def pick_random_from_dict(d: dict[str, list[np.ndarray]]) -> np.ndarray:
-        cat = random.choice(list(d.keys()))
-        return random.choice(d[cat])
+    if len(gunshot_originals) == 0 or len(scream_originals) == 0 or len(accident_originals) == 0:
+        log("\nERROR: Dataset not found!", lines)
+        log(f"Expected paths:", lines)
+        log(f"  Gunshot: {CUSTOM_DATASET_DIR / 'Gunshot'}", lines)
+        log(f"  Scream: {CUSTOM_DATASET_DIR / 'Scream'}", lines)
+        log(f"  Accident: {CUSTOM_DATASET_DIR / 'Accident'}", lines)
+        log("Please check the dataset paths and folder names.", lines)
+        raise FileNotFoundError("Dataset folders not found. Check paths above.")
 
-    def augment_danger_class(
-        originals: list[tuple[np.ndarray, str, str]],
-        label: str,
-        target: int,
-    ) -> None:
-        for sig, lbl, src in originals:
-            all_data.append((sig, lbl, src, "original"))
+    log("\n=== PHASE 2: Train/Validation/Test Split ===", lines)
 
-        existing = len(originals)
-        need = target - existing
-        if need <= 0:
-            return
+    all_originals = gunshot_originals + scream_originals + accident_originals + normal_originals
+    random.shuffle(all_originals)
 
-        log(f"  {label}: {existing} originals -> generating {need} augmented (target: {target})", lines)
+    n_total = len(all_originals)
+    n_train = int(n_total * 0.8)
+    n_val = int(n_total * 0.1)
+    n_test = n_total - n_train - n_val
 
-        for i in range(need):
-            fg_sig, _, fg_src = random.choice(originals)
-            bg_sig = pick_random_bg()
+    train_data = all_originals[:n_train]
+    val_data = all_originals[n_train: n_train + n_val]
+    test_data = all_originals[n_train + n_val:]
 
-            snr_db = random.uniform(*SNR_RANGE)
-            vol = random.uniform(*VOLUME_RANGE)
-            offset = random_bg_offset(len(bg_sig))
+    log(f"Total original files: {n_total}", lines)
+    log(f"Train: {len(train_data)} files", lines)
+    log(f"Validation: {len(val_data)} files", lines)
+    log(f"Test: {len(test_data)} files", lines)
 
-            mixed = mix_two_signals(fg_sig, bg_sig, snr_db, vol, offset)
-            all_data.append((mixed, label, f"aug:{fg_src}+bg", "augmented"))
+    for split_name, split_data in [("Train", train_data), ("Validation", val_data), ("Test", test_data)]:
+        counts = Counter(d[1] for d in split_data)
+        log(f"  {split_name} distribution: {dict(counts)}", lines)
 
-            if (i + 1) % 200 == 0:
-                log(f"    {label}: {i + 1}/{need}", lines)
+    log("\n=== PHASE 3: Compute Normalization Statistics ===", lines)
 
-    augment_danger_class(gunshot_originals, "gunshot", CLASS_TARGETS["gunshot"])
-    augment_danger_class(scream_originals, "scream", CLASS_TARGETS["scream"])
-
-    log(f"\n  Accident augmentation: {len(accident_originals)} originals -> target {CLASS_TARGETS['accident']}", lines)
-    for sig, lbl, src in accident_originals:
-        all_data.append((sig, lbl, src, "original"))
-
-    accident_need = CLASS_TARGETS["accident"] - len(accident_originals)
-    if accident_need > 0:
-        subdir_names = list(accident_subdir_loaded.keys())
-        accident_sound_cats = list(accident_sound_loaded.keys())
-
-        for i in range(accident_need):
-            strategy = random.choice(["two_mix", "three_mix"])
-
-            if strategy == "two_mix":
-                fg_subdir = random.choice(subdir_names)
-                fg_sig = random.choice(accident_subdir_loaded[fg_subdir])
-
-                bg_type = random.choice(["glass", "horn", "bg"])
-                if bg_type == "glass" and "glass_breaking" in accident_sound_loaded:
-                    bg_sig = pick_random_from_dict(accident_sound_loaded)
-                elif bg_type == "horn" and "car_horn" in accident_sound_loaded:
-                    bg_sig = pick_random_from_dict(accident_sound_loaded)
-                else:
-                    bg_sig = pick_random_bg()
-
-                snr_db = random.uniform(*SNR_RANGE)
-                vol = random.uniform(*VOLUME_RANGE)
-                offset = random_bg_offset(len(bg_sig))
-                mixed = mix_two_signals(fg_sig, bg_sig, snr_db, vol, offset)
-
-            else:
-                fg_subdir = random.choice(subdir_names)
-                fg_sig = random.choice(accident_subdir_loaded[fg_subdir])
-
-                extra1_type = random.choice(["other_accident", "glass", "horn", "bg"])
-                if extra1_type == "other_accident":
-                    other_sub = random.choice(subdir_names)
-                    extra1 = random.choice(accident_subdir_loaded[other_sub])
-                elif extra1_type in ("glass", "horn"):
-                    extra1 = pick_random_from_dict(accident_sound_loaded)
-                else:
-                    extra1 = pick_random_bg()
-
-                extra2_type = random.choice(["glass", "horn", "bg"])
-                if extra2_type in ("glass", "horn") and accident_sound_loaded:
-                    extra2 = pick_random_from_dict(accident_sound_loaded)
-                else:
-                    extra2 = pick_random_bg()
-
-                snr_db = random.uniform(*SNR_RANGE)
-                vol = random.uniform(*VOLUME_RANGE)
-                mixed = mix_multi_signals([fg_sig, extra1, extra2], snr_db, vol)
-
-            all_data.append((mixed, "accident", f"aug:accident:{strategy}:{i}", "augmented"))
-
-            if (i + 1) % 200 == 0:
-                log(f"    accident: {i + 1}/{accident_need}", lines)
-
-    for sig, lbl, src in normal_originals:
-        all_data.append((sig, lbl, src, "original"))
-
-    normal_target = 1200
-    normal_need_extra = normal_target - len(normal_originals)
-    if normal_need_extra > 0:
-        log(f"\n  Normal: {len(normal_originals)} originals -> generating {normal_need_extra} extra with light augmentation", lines)
-        for i in range(normal_need_extra):
-            sig, lbl, src = random.choice(normal_originals)
-            bg_sig = pick_random_bg()
-            snr_db = random.uniform(15.0, 30.0)
-            vol = random.uniform(0.7, 1.3)
-            offset = random_bg_offset(len(bg_sig))
-            mixed = mix_two_signals(sig, bg_sig, snr_db, vol, offset)
-            all_data.append((mixed, "normal", f"aug_normal:{src}", "augmented"))
-            if (i + 1) % 200 == 0:
-                log(f"    normal: {i + 1}/{normal_need_extra}", lines)
-
-    random.shuffle(all_data)
-
-    log(f"\nTotal dataset size: {len(all_data)}", lines)
-    counts = Counter(d[1] for d in all_data)
-    orig_counts = Counter(d[1] for d in all_data if d[3] == "original")
-    aug_counts = Counter(d[1] for d in all_data if d[3] == "augmented")
-    for label in sorted(counts):
-        log(f"  {label}: {counts[label]} (orig: {orig_counts.get(label, 0)}, aug: {aug_counts.get(label, 0)})", lines)
-
-    log("\n=== PHASE 3: Mel Spectrogram Extraction ===", lines)
-    t_mel = time.time()
-
-    mels: list[np.ndarray] = []
-    labels: list[str] = []
-    sources: list[str] = []
-    failed = 0
-
-    for i, (sig, label, src, _) in enumerate(all_data):
-        try:
-            mel = audio_to_mel(sig)
-            mels.append(mel)
-            labels.append(label)
-            sources.append(src)
-        except Exception:
-            failed += 1
-
-        if (i + 1) % 500 == 0 or (i + 1) == len(all_data):
-            log(f"  Mel: {i + 1}/{len(all_data)} (failed: {failed}) ({time.time() - t_mel:.1f}s)", lines)
-
-    X_all = np.array(mels, dtype=np.float32)
-    y_all = np.array(labels)
-    source_all = np.array(sources)
-    log(f"Feature shape: {X_all.shape}", lines)
-
-    classes = sorted(set(labels))
+    classes = sorted(set(d[1] for d in all_originals))
     class_to_idx = {c: i for i, c in enumerate(classes)}
-    y_encoded = np.array([class_to_idx[c] for c in y_all])
     log(f"Classes: {classes}", lines)
 
-    log("\n=== PHASE 4: Stratified Group K-Fold Training ===", lines)
+    t_norm = time.time()
+    train_mels = []
+    for sig, lbl, src in train_data:
+        mel = audio_to_mel(sig)
+        train_mels.append(mel)
+    train_mels = np.array(train_mels, dtype=np.float32)
+    mean_val = float(np.mean(train_mels))
+    std_val = float(np.std(train_mels))
+    if std_val < 1e-8:
+        std_val = 1.0
+    log(f"  Train mel mean: {mean_val:.4f}, std: {std_val:.4f} ({time.time() - t_norm:.1f}s)", lines)
 
-    def get_group(source_str: str) -> str:
-        if source_str.startswith("aug:"):
-            parts = source_str.split("+")
-            if len(parts) > 1:
-                bg_part = parts[-1]
-                if bg_part.startswith("bg:"):
-                    return bg_part
-            return source_str
-        return source_str
+    scaler_info = {"mean": mean_val, "std": std_val}
+    with open(OUTPUT_SCALER_PATH, "wb") as f:
+        pickle.dump(scaler_info, f)
+    log(f"Scaler saved: {OUTPUT_SCALER_PATH}", lines)
 
-    groups = np.array([get_group(s) for s in source_all])
+    log("\n=== PHASE 4: Create Datasets ===", lines)
+
+    train_dataset = OnTheFlyAudioDataset(
+        train_data, bg_flat, accident_sound_loaded,
+        classes, class_to_idx, mean_val, std_val,
+        augment=True, mix_prob=MIX_PROB,
+    )
+    val_dataset = OnTheFlyAudioDataset(
+        val_data, bg_flat, accident_sound_loaded,
+        classes, class_to_idx, mean_val, std_val,
+        augment=False, mix_prob=0.0,
+    )
+    test_dataset = OnTheFlyAudioDataset(
+        test_data, bg_flat, accident_sound_loaded,
+        classes, class_to_idx, mean_val, std_val,
+        augment=False, mix_prob=0.0,
+    )
+
+    log(f"Train dataset size: {len(train_dataset)}", lines)
+    log(f"Validation dataset size: {len(val_dataset)}", lines)
+    log(f"Test dataset size: {len(test_dataset)}", lines)
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    log(f"Device: {device}", lines)
+
+    train_counts = Counter(d[1] for d in train_data)
+    num_classes = len(classes)
+
+    cw = np.zeros(num_classes, dtype=np.float32)
+    for ci in range(num_classes):
+        cw[ci] = len(train_data) / (num_classes * max(train_counts.get(classes[ci], 1), 1))
+    cw_t = torch.tensor(cw, dtype=torch.float32).to(device)
+    log(f"Class weights: {dict(zip(classes, cw.tolist()))}", lines)
+
+    sw = [cw[class_to_idx[d[1]]] for d in train_data]
+    sampler = WeightedRandomSampler(sw, num_samples=len(sw), replacement=True)
+
+    train_loader = DataLoader(train_dataset, batch_size=32, sampler=sampler, num_workers=0)
+    val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False, num_workers=0)
+    test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False, num_workers=0)
+
+    log("\n=== PHASE 5: Cross-Validation Training ===", lines)
+
+    from sklearn.model_selection import StratifiedGroupKFold
+
+    def get_group(src: str) -> str:
+        return Path(src).name
+
+    groups = np.array([get_group(d[2]) for d in train_data])
+    y_train = np.array([class_to_idx[d[1]] for d in train_data])
 
     unique_per_class = {}
-    for cls_idx in range(len(classes)):
-        mask = y_encoded == cls_idx
+    for cls_idx in range(num_classes):
+        mask = y_train == cls_idx
         unique_per_class[cls_idx] = len(set(groups[mask]))
 
     min_groups = min(unique_per_class.values())
@@ -642,52 +712,33 @@ def main() -> None:
     log(f"StratifiedGroupKFold: {n_splits} splits", lines)
     log(f"Unique groups per class: {dict((classes[k], v) for k, v in unique_per_class.items())}", lines)
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    log(f"Device: {device}", lines)
-
     skf = StratifiedGroupKFold(n_splits=n_splits, shuffle=True, random_state=42)
 
-    fold_results: list[dict] = []
-    all_fold_preds = np.full_like(y_encoded, -1)
-    all_fold_true = np.full_like(y_encoded, -1)
+    fold_results = []
+    all_fold_preds = np.full_like(y_train, -1)
+    all_fold_true = np.full_like(y_train, -1)
 
-    for fold_idx, (train_idx, val_idx) in enumerate(skf.split(X_all, y_encoded, groups), 1):
+    for fold_idx, (tr_idx, vl_idx) in enumerate(skf.split(train_data, y_train, groups), 1):
         log(f"\n--- Fold {fold_idx}/{n_splits} ---", lines)
 
-        X_traw = X_all[train_idx]
-        y_train = y_encoded[train_idx]
-        X_valraw = X_all[val_idx]
-        y_val = y_encoded[val_idx]
+        fold_train = [train_data[i] for i in tr_idx]
+        fold_val = [train_data[i] for i in vl_idx]
 
-        mean_val = float(np.mean(X_traw))
-        std_val = float(np.std(X_traw))
-        if std_val > 0:
-            X_train = (X_traw - mean_val) / std_val
-            X_val = (X_valraw - mean_val) / std_val
-        else:
-            X_train = X_traw.copy()
-            X_val = X_valraw.copy()
+        fold_train_ds = OnTheFlyAudioDataset(
+            fold_train, bg_flat, accident_sound_loaded,
+            classes, class_to_idx, mean_val, std_val,
+            augment=True, mix_prob=MIX_PROB,
+        )
+        fold_val_ds = OnTheFlyAudioDataset(
+            fold_val, bg_flat, accident_sound_loaded,
+            classes, class_to_idx, mean_val, std_val,
+            augment=False, mix_prob=0.0,
+        )
 
-        X_train_t = torch.tensor(X_train, dtype=torch.float32).unsqueeze(1)
-        y_train_t = torch.tensor(y_train, dtype=torch.long)
-        X_val_t = torch.tensor(X_val, dtype=torch.float32).unsqueeze(1)
-        y_val_t = torch.tensor(y_val, dtype=torch.long)
-
-        train_counts = Counter(y_train.tolist())
-        num_classes = len(classes)
-
-        cw = np.zeros(num_classes, dtype=np.float32)
-        for ci in range(num_classes):
-            cw[ci] = len(y_train) / (num_classes * max(train_counts.get(ci, 1), 1))
-        cw_t = torch.tensor(cw, dtype=torch.float32).to(device)
-
-        sw = [cw[y] for y in y_train]
-        sampler = WeightedRandomSampler(sw, num_samples=len(sw), replacement=True)
-
-        train_ds = MelSpectrogramDataset(X_train, y_train, augment=True)
-        val_ds = MelSpectrogramDataset(X_val, y_val, augment=False)
-        train_loader = DataLoader(train_ds, batch_size=32, sampler=sampler)
-        val_loader = DataLoader(val_ds, batch_size=64, shuffle=False)
+        fold_train_loader = DataLoader(fold_train_ds, batch_size=32, sampler=WeightedRandomSampler(
+            [cw[class_to_idx[d[1]]] for d in fold_train], num_samples=len(fold_train), replacement=True
+        ), num_workers=0)
+        fold_val_loader = DataLoader(fold_val_ds, batch_size=64, shuffle=False, num_workers=0)
 
         model = DangerSoundCNN(num_classes).to(device)
         criterion = nn.CrossEntropyLoss(weight=cw_t)
@@ -706,7 +757,7 @@ def main() -> None:
             t_loss = 0.0
             t_correct = 0
             t_total = 0
-            for bx, by in train_loader:
+            for bx, by in fold_train_loader:
                 bx, by = bx.to(device), by.to(device)
                 optimizer.zero_grad()
                 out = model(bx)
@@ -725,7 +776,7 @@ def main() -> None:
             v_correct = 0
             v_total = 0
             with torch.no_grad():
-                for bx, by in val_loader:
+                for bx, by in fold_val_loader:
                     bx, by = bx.to(device), by.to(device)
                     out = model(bx)
                     loss = criterion(out, by)
@@ -762,7 +813,7 @@ def main() -> None:
         fold_preds = []
         fold_true = []
         with torch.no_grad():
-            for bx, by in val_loader:
+            for bx, by in fold_val_loader:
                 bx = bx.to(device)
                 out = model(bx)
                 fold_preds.extend(out.argmax(1).cpu().numpy())
@@ -770,8 +821,8 @@ def main() -> None:
 
         fp = np.array(fold_preds)
         ft = np.array(fold_true)
-        all_fold_preds[val_idx] = fp
-        all_fold_true[val_idx] = ft
+        all_fold_preds[vl_idx] = fp
+        all_fold_true[vl_idx] = ft
 
         fold_acc = float(np.mean(fp == ft))
         fold_f1 = float(f1_score(ft, fp, average="macro", zero_division=0))
@@ -782,7 +833,7 @@ def main() -> None:
     y_true_final = all_fold_true[valid_mask]
     y_pred_final = all_fold_preds[valid_mask]
 
-    log("\n=== PHASE 5: Final Evaluation (CV Aggregated) ===", lines)
+    log("\n=== PHASE 6: Cross-Validation Evaluation ===", lines)
 
     overall_acc = float(np.mean(y_pred_final == y_true_final))
     log(f"\nOverall CV Accuracy: {overall_acc:.4f}", lines)
@@ -806,7 +857,7 @@ def main() -> None:
     for i, row in enumerate(cm):
         log(f"  {classes[i]}: {row.tolist()}", lines)
 
-    log("\nPer-class metrics:", lines)
+    log("\nPer-class metrics (CV):", lines)
     for i, cls in enumerate(classes):
         mask_i = y_true_final == i
         total_i = int(np.sum(mask_i))
@@ -823,88 +874,33 @@ def main() -> None:
 
     plot_confusion_matrix(y_true_final, y_pred_final, classes, OUTPUT_CM_IMAGE)
 
-    log("\n=== PHASE 6: Train Final Model on Full Dataset ===", lines)
+    log("\n=== PHASE 7: Train Final Model on Full Training Set ===", lines)
 
-    mean_full = float(np.mean(X_all))
-    std_full = float(np.std(X_all))
-    if std_full > 0:
-        X_normalized = (X_all - mean_full) / std_full
-    else:
-        X_normalized = X_all.copy()
+    full_train_ds = OnTheFlyAudioDataset(
+        train_data, bg_flat, accident_sound_loaded,
+        classes, class_to_idx, mean_val, std_val,
+        augment=True, mix_prob=MIX_PROB,
+    )
+    full_train_loader = DataLoader(full_train_ds, batch_size=32, sampler=sampler, num_workers=0)
 
-    scaler_info = {"mean": mean_full, "std": std_full}
-    with open(OUTPUT_SCALER_PATH, "wb") as f:
-        pickle.dump(scaler_info, f)
-    log(f"Scaler saved: {OUTPUT_SCALER_PATH}", lines)
-
-    X_full_t = torch.tensor(X_normalized, dtype=torch.float32).unsqueeze(1)
-    y_full_t = torch.tensor(y_encoded, dtype=torch.long)
-
-    full_counts = Counter(y_encoded.tolist())
-    cw_full = np.zeros(len(classes), dtype=np.float32)
-    for ci in range(len(classes)):
-        cw_full[ci] = len(y_encoded) / (len(classes) * max(full_counts.get(ci, 1), 1))
-    cw_full_t = torch.tensor(cw_full, dtype=torch.float32).to(device)
-
-    sw_full = [cw_full[y] for y in y_encoded]
-    sampler_full = WeightedRandomSampler(sw_full, num_samples=len(sw_full), replacement=True)
-
-    full_ds = MelSpectrogramDataset(X_normalized, y_encoded, augment=True)
-    full_loader = DataLoader(full_ds, batch_size=32, sampler=sampler_full)
-
-    final_model = DangerSoundCNN(len(classes)).to(device)
+    final_model = DangerSoundCNN(num_classes).to(device)
     final_optimizer = optim.Adam(final_model.parameters(), lr=1e-3, weight_decay=1e-4)
-    final_criterion = nn.CrossEntropyLoss(weight=cw_full_t)
+    final_criterion = nn.CrossEntropyLoss(weight=cw_t)
+    final_scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+        final_optimizer, mode="min", factor=0.5, patience=5, min_lr=1e-6,
+    )
 
     history = {"train_loss": [], "train_acc": [], "val_loss": [], "val_acc": []}
     best_final_acc = 0.0
     best_final_state = None
     patience_c = 0
 
-    n_val = int(len(y_encoded) * 0.15)
-    val_indices = np.random.RandomState(42).choice(len(y_encoded), n_val, replace=False)
-    train_mask = np.ones(len(y_encoded), dtype=bool)
-    train_mask[val_indices] = False
-
-    X_trn = X_normalized[train_mask]
-    y_trn = y_encoded[train_mask]
-    X_vln = X_normalized[val_indices]
-    y_vln = y_encoded[val_indices]
-
-    X_trn_t = torch.tensor(X_trn, dtype=torch.float32).unsqueeze(1)
-    y_trn_t = torch.tensor(y_trn, dtype=torch.long)
-    X_vln_t = torch.tensor(X_vln, dtype=torch.float32).unsqueeze(1)
-    y_vln_t = torch.tensor(y_vln, dtype=torch.long)
-
-    trn_counts = Counter(y_trn.tolist())
-    cw_trn = np.zeros(len(classes), dtype=np.float32)
-    for ci in range(len(classes)):
-        cw_trn[ci] = len(y_trn) / (len(classes) * max(trn_counts.get(ci, 1), 1))
-    cw_trn_t = torch.tensor(cw_trn, dtype=torch.float32).to(device)
-
-    sw_trn = [cw_trn[y] for y in y_trn]
-    sampler_trn = WeightedRandomSampler(sw_trn, num_samples=len(sw_trn), replacement=True)
-
-    trn_ds = MelSpectrogramDataset(X_trn, y_trn, augment=True)
-    vln_ds = MelSpectrogramDataset(X_vln, y_vln, augment=False)
-    trn_loader = DataLoader(trn_ds, batch_size=32, sampler=sampler_trn)
-    vln_loader = DataLoader(vln_ds, batch_size=64, shuffle=False)
-
-    final_optimizer = optim.Adam(final_model.parameters(), lr=1e-3, weight_decay=1e-4)
-    final_criterion = nn.CrossEntropyLoss(weight=cw_trn_t)
-    final_scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-        final_optimizer, mode="min", factor=0.5, patience=5, min_lr=1e-6,
-    )
-
-    log("Training final model...", lines)
-    t_final = time.time()
-
     for epoch in range(1, 81):
         final_model.train()
         ft_loss = 0.0
         ft_correct = 0
         ft_total = 0
-        for bx, by in trn_loader:
+        for bx, by in full_train_loader:
             bx, by = bx.to(device), by.to(device)
             final_optimizer.zero_grad()
             out = final_model(bx)
@@ -923,7 +919,7 @@ def main() -> None:
         fv_correct = 0
         fv_total = 0
         with torch.no_grad():
-            for bx, by in vln_loader:
+            for bx, by in val_loader:
                 bx, by = bx.to(device), by.to(device)
                 out = final_model(bx)
                 loss = final_criterion(out, by)
@@ -943,9 +939,8 @@ def main() -> None:
         history["val_acc"].append(fv_acc)
 
         if epoch % 10 == 0 or epoch == 1:
-            elapsed = time.time() - t_final
             log(f"  Epoch {epoch:3d} | t_loss={ft_loss:.4f} t_acc={ft_acc:.4f} "
-                f"| v_loss={fv_loss:.4f} v_acc={fv_acc:.4f} | lr={lr:.6f} ({elapsed:.1f}s)", lines)
+                f"| v_loss={fv_loss:.4f} v_acc={fv_acc:.4f} | lr={lr:.6f}", lines)
 
         if fv_acc > best_final_acc:
             best_final_acc = fv_acc
@@ -967,7 +962,23 @@ def main() -> None:
     log(f"\nFinal model best val_acc: {best_final_acc:.4f}", lines)
     log(f"Total training time: {time.time() - t_start:.1f}s", lines)
 
-    log("\n=== PHASE 7: Save Model ===", lines)
+    log("\n=== PHASE 8: Final Test Evaluation ===", lines)
+
+    test_results = evaluate_model(final_model, test_loader, device, classes)
+    log(f"Test loss: {test_results['loss']:.4f}", lines)
+    log(f"Test accuracy: {test_results['accuracy']:.4f}", lines)
+    log("\nClassification Report (Test):", lines)
+    log(test_results["report"], lines)
+    log("Confusion Matrix (Test):", lines)
+    log(f"Labels: {classes}", lines)
+    for i, row in enumerate(test_results["confusion_matrix"]):
+        log(f"  {classes[i]}: {row.tolist()}", lines)
+    log("\nPer-class metrics (Test):", lines)
+    for cls, metrics in test_results["per_class"].items():
+        log(f"  {cls}: precision={metrics['precision']:.4f} recall={metrics['recall']:.4f} "
+            f"f1={metrics['f1']:.4f} support={metrics['support']}", lines)
+
+    log("\n=== PHASE 9: Save Model ===", lines)
     torch.save(
         {
             "model_state_dict": final_model.state_dict(),
@@ -993,6 +1004,19 @@ def main() -> None:
     log("\n" + "=" * 60, lines)
     log("TRAINING COMPLETE", lines)
     log("=" * 60, lines)
+
+    lines.append(f"\nDataset Summary:")
+    lines.append(f"  Gunshot original: {len(gunshot_originals)}")
+    lines.append(f"  Scream original: {len(scream_originals)}")
+    lines.append(f"  Accident original: {len(accident_originals)}")
+    lines.append(f"  Normal original: {len(normal_originals)}")
+    lines.append(f"  Train: {len(train_data)}")
+    lines.append(f"  Validation: {len(val_data)}")
+    lines.append(f"  Test: {len(test_data)}")
+    lines.append(f"\nAugmentation: on-the-fly only (no permanent augmented files)")
+    lines.append(f"  Mix probability: {MIX_PROB}")
+    lines.append(f"  SNR range: {SNR_RANGE}")
+    lines.append(f"  Volume range: {VOLUME_RANGE}")
 
     with open(OUTPUT_REPORT_PATH, "w", encoding="utf-8") as f:
         f.write("\n".join(lines))

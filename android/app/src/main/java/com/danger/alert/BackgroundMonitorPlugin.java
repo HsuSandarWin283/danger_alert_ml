@@ -58,7 +58,7 @@ public class BackgroundMonitorPlugin extends Plugin {
 
     @PluginMethod
     public void startMonitoring(PluginCall call) {
-        String apiUrl = call.getString("apiUrl", "http://192.168.100.146:8000");
+        String apiUrl = call.getString("apiUrl", "https://danger-alert-to-trusted.onrender.com");
 
         Intent intent = new Intent(getContext(), MonitoringService.class);
         intent.setAction(MonitoringService.ACTION_START);

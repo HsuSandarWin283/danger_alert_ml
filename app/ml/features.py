@@ -2,7 +2,7 @@ import numpy as np
 import librosa
 
 SAMPLE_RATE = 22050
-CLIP_DURATION = 5.0
+CLIP_DURATION = 3.0
 N_MFCC = 20
 N_FFT = 2048
 HOP_LENGTH = 512

@@ -42,5 +42,13 @@ pip install -r app/ml/requirements.txt
 # Train model
 python app/ml/train_cnn_augmented.py
 
-# Test prediction
-python app/ml/predict_sound.py path/to/audio.wav
+# Output files
+# - app/ml/danger_sound_cnn_model.pth
+# - app/ml/cnn_classes.pkl
+# - app/ml/cnn_scaler_info.pkl
+# - app/ml/training_report.txt
+# - app/ml/confusion_matrix.png
+# - app/ml/training_curves.png
+
+# Start API server
+python run_server.py
