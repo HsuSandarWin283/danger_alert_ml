@@ -1,5 +1,8 @@
 package com.danger.alert;
 
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ServiceInfo;
@@ -30,11 +33,13 @@ import android.location.Address;
 import android.location.Geocoder;
 import android.location.Location;
 import android.location.LocationManager;
-import android.os.Build;
 import android.util.Log;
 
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
+
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
 
 @CapacitorPlugin(name = "BackgroundMonitor")
 public class BackgroundMonitorPlugin extends Plugin {
@@ -58,7 +63,7 @@ public class BackgroundMonitorPlugin extends Plugin {
 
     @PluginMethod
     public void startMonitoring(PluginCall call) {
-        String apiUrl = call.getString("apiUrl", "https://danger-alert-to-trusted.onrender.com");
+        String apiUrl = call.getString("apiUrl", "http://192.168.99.112:8000");
 
         Intent intent = new Intent(getContext(), MonitoringService.class);
         intent.setAction(MonitoringService.ACTION_START);
@@ -149,6 +154,13 @@ public class BackgroundMonitorPlugin extends Plugin {
                                         ed.apply();
                                     } else {
                                         Log.e(TAG, "Failed to get fresh FCM token", task.getException());
+                                        try {
+                                            Intent offlineIntent = new Intent(getContext(), MonitoringService.class);
+                                            offlineIntent.setAction(MonitoringService.ACTION_TRIGGER_OFFLINE_ALERT);
+                                            getContext().startService(offlineIntent);
+                                        } catch (Exception e) {
+                                            Log.w(TAG, "Failed to trigger offline alert", e);
+                                        }
                                     }
                                 });
                     } catch (Exception e) {
@@ -568,6 +580,13 @@ public class BackgroundMonitorPlugin extends Plugin {
                     });
         } catch (Exception e) {
             Log.e(TAG, "fetchFcmToken exception", e);
+            try {
+                Intent offlineIntent = new Intent(getContext(), MonitoringService.class);
+                offlineIntent.setAction(MonitoringService.ACTION_TRIGGER_OFFLINE_ALERT);
+                getContext().startService(offlineIntent);
+            } catch (Exception ex) {
+                Log.w(TAG, "Failed to trigger offline alert", ex);
+            }
             call.reject("Exception: " + e.getMessage());
         }
     }
@@ -582,6 +601,43 @@ public class BackgroundMonitorPlugin extends Plugin {
         }
         JSObject result = new JSObject();
         result.put("route", route != null ? route : "");
+        call.resolve(result);
+    }
+
+    @PluginMethod
+    public void showModelOfflineAlert(PluginCall call) {
+        NotificationStrings ns = new NotificationStrings(getContext());
+
+        Intent launchIntent = getContext().getPackageManager().getLaunchIntentForPackage(getContext().getPackageName());
+        PendingIntent contentPending = PendingIntent.getActivity(
+                getContext(), 0, launchIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(getContext(), MonitoringService.OFFLINE_CHANNEL_ID)
+                .setContentTitle(ns.modelOfflineTitle())
+                .setContentText(ns.modelOfflineMessage())
+                .setSmallIcon(android.R.drawable.ic_dialog_alert)
+                .setContentIntent(contentPending)
+                .setOngoing(true)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_STATUS)
+                .setAutoCancel(false);
+
+        NotificationManagerCompat manager = NotificationManagerCompat.from(getContext());
+        manager.notify(MonitoringService.OFFLINE_NOTIFICATION_ID, builder.build());
+
+        JSObject result = new JSObject();
+        result.put("shown", true);
+        call.resolve(result);
+    }
+
+    @PluginMethod
+    public void dismissModelOfflineAlert(PluginCall call) {
+        NotificationManagerCompat manager = NotificationManagerCompat.from(getContext());
+        manager.cancel(MonitoringService.OFFLINE_NOTIFICATION_ID);
+        JSObject result = new JSObject();
+        result.put("dismissed", true);
         call.resolve(result);
     }
 }

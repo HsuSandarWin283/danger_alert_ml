@@ -39,14 +39,17 @@ type UseDangerSoundMonitorReturn = {
   stopMonitoring: () => void;
 };
 
-const DEFAULT_PREDICT_URL = 'https://danger-alert-to-trusted.onrender.com/predict';
-const CHUNK_MS = 3000;
+const DEFAULT_PREDICT_URL = 'http://192.168.99.112:8000/predict';
+const WINDOW_SECONDS = 3;
+const ANALYSIS_HOP_MS = 1000;
 const RMS_CHECK_MS = 200;
 const SCRIPT_PROCESSOR_BUFFER_SIZE = 4096;
-const RMS_THRESHOLD = 0.003;
-const CONFIDENCE_THRESHOLD = 0.8;
+const RMS_THRESHOLD = 0.004;
+const CONFIDENCE_THRESHOLD = 0.88;
 const DUPLICATE_ALERT_MS = 10000;
-const DANGER_LABELS = new Set(['accident', 'gunshot', 'scream', 'glass_break']);
+const DANGER_COOLDOWN_MS = 3000;
+const DANGER_LABELS = new Set(['accident', 'gunshot', 'scream']);
+const MAX_BUFFER_SECONDS = 7;
 
 function getPredictUrl() {
   return process.env.NEXT_PUBLIC_DANGER_PREDICT_URL || DEFAULT_PREDICT_URL;
@@ -164,6 +167,9 @@ export function useDangerSoundMonitor(
   const mountedRef = useRef(false);
   const closingAudioContextsRef = useRef<WeakSet<AudioContext>>(new WeakSet());
   const startTimeRef = useRef<number>(0);
+  const lastAnalysisTimeRef = useRef<number>(0);
+  const dangerStateRef = useRef<'NORMAL' | 'DANGER'>('NORMAL');
+  const lastDangerTimeRef = useRef<number>(0);
   const WARMUP_MS = 3000;
   const MONITORING_KEY = 'danger_monitoring_active';
 
@@ -215,6 +221,10 @@ export function useDangerSoundMonitor(
 
     pendingSamplesRef.current = [];
     isPredictingRef.current = false;
+    lastAlertRef.current = null;
+    dangerStateRef.current = 'NORMAL';
+    lastDangerTimeRef.current = 0;
+    lastAnalysisTimeRef.current = 0;
 
     if (Capacitor.isNativePlatform()) {
  BackgroundMonitor.stopMonitoring().catch(() => {});
@@ -377,7 +387,7 @@ export function useDangerSoundMonitor(
       const stream = await window.navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: false,
-          noiseSuppression: false,
+          noiseSuppression: true,
           autoGainControl: false,
         },
       });
@@ -428,15 +438,31 @@ export function useDangerSoundMonitor(
         }
       };
 
-      const processChunk = () => {
+      const maxBufferSamples = audioContext.sampleRate * MAX_BUFFER_SECONDS;
+
+      processor.onaudioprocess = (event) => {
+        const input = event.inputBuffer.getChannelData(0);
+
+        for (let i = 0; i < input.length; i += 1) {
+          pendingSamplesRef.current.push(input[i]);
+        }
+
+        if (pendingSamplesRef.current.length > maxBufferSamples) {
+          pendingSamplesRef.current.splice(
+            0,
+            pendingSamplesRef.current.length - maxBufferSamples,
+          );
+        }
+      };
+
+      const analyzeWindow = () => {
         if (Date.now() - startTimeRef.current < WARMUP_MS) {
-          pendingSamplesRef.current = [];
           return;
         }
 
-        const targetSamples = audioContext.sampleRate * 3;
+        const targetSamples = Math.floor(audioContext.sampleRate * WINDOW_SECONDS);
 
-        if (pendingSamplesRef.current.length < audioContext.sampleRate * 3) {
+        if (pendingSamplesRef.current.length < targetSamples) {
           return;
         }
 
@@ -444,30 +470,40 @@ export function useDangerSoundMonitor(
           return;
         }
 
-        const count = Math.min(pendingSamplesRef.current.length, targetSamples);
-        const samples = pendingSamplesRef.current.slice(0, count);
+        const samples = pendingSamplesRef.current.slice(-targetSamples);
         const rms = calculateRms(samples);
-
         currentRmsRef.current = rms;
         setRmsLevel(rms);
 
-        if (rms < RMS_THRESHOLD) {
+        const rmsPassed = rms >= RMS_THRESHOLD;
+        console.log(
+          `[danger-monitor] RMS=${rms.toFixed(4)} threshold=${RMS_THRESHOLD} rmsPassed=${rmsPassed}`,
+        );
+
+        if (!rmsPassed) {
+          if (dangerStateRef.current === 'DANGER') {
+            const timeSinceDanger = Date.now() - lastDangerTimeRef.current;
+            if (timeSinceDanger > DANGER_COOLDOWN_MS) {
+              dangerStateRef.current = 'NORMAL';
+              console.log(`[danger-monitor] STATE=NORMAL cooldownExpired=true`);
+            } else {
+              console.log(
+                `[danger-monitor] STATE=DANGER cooldownRemaining=${DANGER_COOLDOWN_MS - timeSinceDanger}ms`,
+              );
+            }
+          }
           return;
         }
 
-        pendingSamplesRef.current.splice(0, count);
+        console.log(`[danger-monitor] RMS PASS rms=${rms.toFixed(4)} threshold=${RMS_THRESHOLD}`);
+
         isPredictingRef.current = true;
 
         const sendPrediction = async () => {
           try {
-            const formData = new FormData();
             const normalized = normalizeSamples(samples);
             const wavBlob = samplesToWavBlob(normalized, audioContext.sampleRate);
-            console.log('sampleRate', audioContext.sampleRate);
-            console.log('original rms', rms.toFixed(4));
-            console.log('normalized rms', calculateRms(normalized).toFixed(4));
-            console.log('wav size', wavBlob.size);
-            console.log('wav type', wavBlob.type);
+            const formData = new FormData();
             formData.append('file', wavBlob, `monitoring-${Date.now()}.wav`);
 
             const response = await fetch(getPredictUrl(), {
@@ -484,46 +520,85 @@ export function useDangerSoundMonitor(
             prediction.rms = rms;
             setLastPrediction(prediction);
 
-            if (
-              DANGER_LABELS.has(prediction.prediction) &&
-              prediction.confidence >= CONFIDENCE_THRESHOLD
-            ) {
-              const now = Date.now();
-              const lastAlert = lastAlertRef.current;
-              const isDuplicate =
-                lastAlert &&
-                lastAlert.label === prediction.prediction &&
-                now - lastAlert.timestamp < DUPLICATE_ALERT_MS;
+            const serverIsDanger = Boolean(data.is_danger);
+            const now = Date.now();
 
-              if (!isDuplicate) {
-                lastAlertRef.current = {
-                  label: prediction.prediction,
-                  timestamp: now,
-                };
+            console.log(
+              `[danger-monitor] label=${prediction.prediction} confidence=${prediction.confidence.toFixed(4)} ` +
+                `rms=${rms.toFixed(4)} rmsPassed=true serverIsDanger=${serverIsDanger} reason=${data.reason || 'unknown'} ` +
+                `state=${dangerStateRef.current}`,
+            );
 
-                const payload: DangerAlertPayload = {
-                  detectedAnswer: formatLabel(prediction.prediction),
-                  confidence: prediction.confidence,
-                  probabilities: prediction.probabilities,
-                  rms,
-                };
+            if (serverIsDanger) {
+              lastDangerTimeRef.current = now;
 
-                if (!Capacitor.isNativePlatform()) {
-                  window.dispatchEvent(
-                    new CustomEvent('danger-detected', {
-                      detail: payload,
-                    }),
+              if (dangerStateRef.current === 'NORMAL') {
+                const lastAlert = lastAlertRef.current;
+                const isDuplicate =
+                  lastAlert &&
+                  lastAlert.label === prediction.prediction &&
+                  now - lastAlert.timestamp < DUPLICATE_ALERT_MS;
+
+                if (!isDuplicate) {
+                  dangerStateRef.current = 'DANGER';
+                  lastAlertRef.current = {
+                    label: prediction.prediction,
+                    timestamp: now,
+                  };
+
+                  const payload: DangerAlertPayload = {
+                    detectedAnswer: formatLabel(prediction.prediction),
+                    confidence: prediction.confidence,
+                    probabilities: prediction.probabilities,
+                    rms,
+                  };
+
+                  console.log(
+                    `[danger-monitor] STATE=DANGER ACTION=TRIGGER_DANGER label=${prediction.prediction} confidence=${prediction.confidence.toFixed(4)}`,
+                  );
+
+                  if (!Capacitor.isNativePlatform()) {
+                    window.dispatchEvent(
+                      new CustomEvent('danger-detected', {
+                        detail: payload,
+                      }),
+                    );
+                  }
+
+                  if (mountedRef.current) {
+                    onDangerDetected?.(payload);
+                  }
+                } else {
+                  console.log(
+                    `[danger-monitor] STATE=DANGER ACTION=DUPLICATE_SUPPRESSED label=${prediction.prediction}`,
                   );
                 }
-
-                if (mountedRef.current) {
-                  onDangerDetected?.(payload);
+              } else {
+                console.log(
+                  `[danger-monitor] STATE=DANGER ACTION=IGNORE label=${prediction.prediction}`,
+                );
+              }
+            } else {
+              if (dangerStateRef.current === 'DANGER') {
+                const timeSinceDanger = now - lastDangerTimeRef.current;
+                if (timeSinceDanger > DANGER_COOLDOWN_MS) {
+                  dangerStateRef.current = 'NORMAL';
+                  console.log(`[danger-monitor] STATE=NORMAL cooldownExpired=true`);
+                } else {
+                  console.log(
+                    `[danger-monitor] STATE=DANGER cooldownRemaining=${DANGER_COOLDOWN_MS - timeSinceDanger}ms`,
+                  );
                 }
+              } else {
+                console.log(
+                  `[danger-monitor] STATE=NORMAL ACTION=IGNORE label=${prediction.prediction} confidence=${prediction.confidence.toFixed(4)}`,
+                );
               }
             }
           } catch (err) {
             const message = err instanceof Error ? err.message : 'Prediction failed';
             setError(message);
+            console.error(`[danger-monitor] ERROR=${message}`);
           } finally {
             isPredictingRef.current = false;
           }
@@ -532,8 +607,16 @@ export function useDangerSoundMonitor(
         void sendPrediction();
       };
 
-      intervalRef.current = window.setInterval(processChunk, 1000);
-      startTimeRef.current = Date.now();
+      const scheduleAnalysis = () => {
+        const now = Date.now();
+        if (now - lastAnalysisTimeRef.current >= ANALYSIS_HOP_MS) {
+          lastAnalysisTimeRef.current = now;
+          analyzeWindow();
+        }
+      };
+
+      intervalRef.current = window.setInterval(scheduleAnalysis, ANALYSIS_HOP_MS);
+      lastAnalysisTimeRef.current = Date.now();
       setIsRecording(true);
       setIsMonitoring(true);
       localStorage.setItem(MONITORING_KEY, 'true');

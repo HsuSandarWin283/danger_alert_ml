@@ -187,4 +187,12 @@ public class NotificationStrings {
         }
         return senderName + " needs help!";
     }
+
+    public String modelOfflineTitle() {
+        return isMy() ? "မော်ဒယ်အော့ဖ်လိုင်း" : "AI Model Offline";
+    }
+
+    public String modelOfflineMessage() {
+        return isMy() ? "မော်ဒယ်စ server အော့ဖ်လိုင်းဖြစ်နေပါသည်။ စောင့်ကြည့်ခြင်း မအောင်မြင်နိုင်ပါ။" : "AI Model server is offline. Monitoring may not work.";
+    }
 }

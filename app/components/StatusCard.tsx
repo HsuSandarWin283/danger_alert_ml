@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import { useMicrophoneContext } from "@/app/lib/MicrophoneProvider"
 import { useLang } from "@/app/lib/LanguageProvider"
+import BackgroundMonitor from "@/app/lib/background-monitor"
 
 type StatusCardProps = {
   error?: string | null
@@ -14,6 +15,28 @@ export default function StatusCard({ error = null }: StatusCardProps) {
   const [apiStatus, setApiStatus] = useState("checking")
   const retryRef = useRef(0)
   const MAX_RETRIES = 10
+  const offlineAlertShown = useRef(false)
+
+  useEffect(() => {
+    if (apiStatus === "unhealthy" && !offlineAlertShown.current) {
+      offlineAlertShown.current = true
+      BackgroundMonitor.showModelOfflineAlert().catch(() => {})
+    } else if (apiStatus === "healthy") {
+      if (offlineAlertShown.current) {
+        BackgroundMonitor.dismissModelOfflineAlert().catch(() => {})
+      }
+      offlineAlertShown.current = false
+    }
+  }, [apiStatus])
+
+  useEffect(() => {
+    if (!error || offlineAlertShown.current) return
+    const lower = error.toLowerCase()
+    if (lower.includes("failed to fetch") || lower.includes("networkerror") || lower.includes("fetch failed")) {
+      offlineAlertShown.current = true
+      BackgroundMonitor.showModelOfflineAlert().catch(() => {})
+    }
+  }, [error])
 
   const apiBaseUrl =
     process.env.NEXT_PUBLIC_DANGER_API_URL || 'https://danger-alert-ml.onrender.com';

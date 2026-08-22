@@ -11,6 +11,8 @@ export interface BackgroundMonitorPlugin {
   fetchFcmToken(options: { userId: string }): Promise<{ fcmToken: string }>;
   setLanguage(options: { lang: string }): Promise<{ saved: boolean }>;
   getPendingNavigate(): Promise<{ route: string }>;
+  showModelOfflineAlert(): Promise<{ shown: boolean }>;
+  dismissModelOfflineAlert(): Promise<{ dismissed: boolean }>;
   addListener(eventName: 'monitoringStateChanged', listenerFunc: (data: { running: boolean }) => void): Promise<PluginListenerHandle>;
 }
 

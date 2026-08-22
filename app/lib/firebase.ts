@@ -1,4 +1,4 @@
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApps, FirebaseApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
@@ -11,8 +11,32 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-const app = initializeApp(firebaseConfig);
+const dummyConfig = {
+  apiKey: "dummy-api-key",
+  authDomain: "dummy.firebaseapp.com",
+  projectId: "dummy-project",
+  storageBucket: "dummy.appspot.com",
+  messagingSenderId: "123456789",
+  appId: "1:123456789:web:dummy",
+};
 
-export const auth = getAuth(app);
-export const db = getFirestore(app);
+let app: FirebaseApp;
+let auth: ReturnType<typeof getAuth>;
+let db: ReturnType<typeof getFirestore>;
+
+try {
+  if (!getApps().length) {
+    app = initializeApp(firebaseConfig);
+  } else {
+    app = getApps()[0];
+  }
+  auth = getAuth(app);
+  db = getFirestore(app);
+} catch {
+  app = initializeApp(dummyConfig);
+  auth = getAuth(app);
+  db = getFirestore(app);
+}
+
+export { app, auth, db };
 export default app;

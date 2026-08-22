@@ -3,6 +3,7 @@ package com.danger.alert;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
 import android.os.Build;
@@ -25,11 +26,18 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
     private static final String HELP_CHANNEL_ID = "help_messages";
     private static final int HELP_NOTIFICATION_ID = 3001;
 
-    public static void fetchAndSaveToken() {
+    public static void fetchAndSaveToken(Context context) {
         FirebaseMessaging.getInstance().getToken()
                 .addOnCompleteListener(task -> {
                     if (!task.isSuccessful()) {
                         Log.w(TAG, "FCM token fetch failed", task.getException());
+                        try {
+                            Intent offlineIntent = new Intent(context, MonitoringService.class);
+                            offlineIntent.setAction(MonitoringService.ACTION_TRIGGER_OFFLINE_ALERT);
+                            context.startService(offlineIntent);
+                        } catch (Exception e) {
+                            Log.w(TAG, "Failed to trigger offline alert", e);
+                        }
                         return;
                     }
                     String token = task.getResult();
