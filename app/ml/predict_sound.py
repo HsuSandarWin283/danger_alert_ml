@@ -20,6 +20,11 @@ MODEL_DIR = os.path.dirname(__file__) or "."
 CNN_MODEL_PATH_PTH = os.path.join(MODEL_DIR, "danger_sound_cnn_model.pth")
 CNN_CLASSES_PATH = os.path.join(MODEL_DIR, "cnn_classes.pkl")
 CNN_SCALER_PATH = os.path.join(MODEL_DIR, "cnn_scaler_info.pkl")
+CLASSIFIER_THRESHOLD_JSON = os.path.join(MODEL_DIR, "classifier_thresholds.json")
+GATE_MODEL_PATH_PTH = os.path.join(MODEL_DIR, "danger_gate_model.pth")
+GATE_CLASSES_PATH = os.path.join(MODEL_DIR, "gate_classes.pkl")
+GATE_SCALER_PATH = os.path.join(MODEL_DIR, "gate_scaler_info.pkl")
+GATE_THRESHOLD_JSON = os.path.join(MODEL_DIR, "gate_thresholds.json")
 LEGACY_MODEL_PATH = os.path.join(MODEL_DIR, "danger_sound_model.pkl")
 YAMNET_MODEL_PATH = os.path.join(MODEL_DIR, "yamnet_classifier.pkl")
 YAMNET_TF_MODEL_DIR = os.path.join(MODEL_DIR, "yamnet_model")
@@ -41,8 +46,15 @@ YAMNET_USE_HYBRID_FEATURES = True
 _cnn_model = None
 _cnn_classes = None
 _cnn_scaler_info = None
+_classifier_confidence_threshold = None
+_classifier_margin_threshold = None
 _model_type: str | None = None
 _device = None
+
+_gate_model = None
+_gate_classes = None
+_gate_scaler_info = None
+_gate_threshold = 0.5
 
 _yamnet_tf_model = None
 _yamnet_pipeline = None
@@ -96,9 +108,6 @@ class DangerSoundCNN:
                     nn.AdaptiveAvgPool2d(1),
                 )
                 self.classifier = nn.Sequential(
-                    nn.Linear(256, 256),
-                    nn.ReLU(inplace=True),
-                    nn.Dropout(0.5),
                     nn.Linear(256, 128),
                     nn.ReLU(inplace=True),
                     nn.Dropout(0.3),
@@ -111,6 +120,113 @@ class DangerSoundCNN:
                 return self.classifier(x)
 
         return _DangerSoundCNN
+
+
+class BinaryDangerGate:
+    _instance_class = None
+
+    @staticmethod
+    def _build_class():
+        import torch
+        import torch.nn as nn
+
+        class _BinaryDangerGate(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.features = nn.Sequential(
+                    nn.Conv2d(1, 32, 3, padding=1),
+                    nn.BatchNorm2d(32),
+                    nn.ReLU(inplace=True),
+                    nn.Conv2d(32, 32, 3, padding=1),
+                    nn.BatchNorm2d(32),
+                    nn.ReLU(inplace=True),
+                    nn.MaxPool2d(2),
+                    nn.Dropout2d(0.1),
+
+                    nn.Conv2d(32, 64, 3, padding=1),
+                    nn.BatchNorm2d(64),
+                    nn.ReLU(inplace=True),
+                    nn.Conv2d(64, 64, 3, padding=1),
+                    nn.BatchNorm2d(64),
+                    nn.ReLU(inplace=True),
+                    nn.MaxPool2d(2),
+                    nn.Dropout2d(0.15),
+
+                    nn.Conv2d(64, 128, 3, padding=1),
+                    nn.BatchNorm2d(128),
+                    nn.ReLU(inplace=True),
+                    nn.Conv2d(128, 128, 3, padding=1),
+                    nn.BatchNorm2d(128),
+                    nn.ReLU(inplace=True),
+                    nn.MaxPool2d(2),
+                    nn.Dropout2d(0.2),
+
+                    nn.Conv2d(128, 256, 3, padding=1),
+                    nn.BatchNorm2d(256),
+                    nn.ReLU(inplace=True),
+                    nn.AdaptiveAvgPool2d(1),
+                )
+                self.classifier = nn.Sequential(
+                    nn.Linear(256, 128),
+                    nn.ReLU(inplace=True),
+                    nn.Dropout(0.3),
+                    nn.Linear(128, 1),
+                )
+
+            def forward(self, x):
+                x = self.features(x)
+                x = x.view(x.size(0), -1)
+                return self.classifier(x)
+
+        return _BinaryDangerGate
+
+
+def _load_gate_model() -> tuple:
+    import torch
+
+    checkpoint = torch.load(GATE_MODEL_PATH_PTH, map_location="cpu", weights_only=False)
+
+    if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
+        state_dict = checkpoint["model_state_dict"]
+        classes = checkpoint.get("classes", ["non_danger", "danger"])
+        scaler_info = checkpoint.get("scaler_info", None)
+    else:
+        state_dict = checkpoint
+        with open(GATE_CLASSES_PATH, "rb") as f:
+            raw = pickle.load(f)
+        classes = raw["classes"] if isinstance(raw, dict) and "classes" in raw else raw
+        scaler_info = None
+        if os.path.exists(GATE_SCALER_PATH):
+            with open(GATE_SCALER_PATH, "rb") as f:
+                scaler_info = pickle.load(f)
+
+    BinaryDangerGate._instance_class = BinaryDangerGate._build_class()
+    model = BinaryDangerGate._instance_class()
+    model.load_state_dict(state_dict)
+
+    device = _get_device()
+    model = model.to(device)
+    model.eval()
+
+    logger.info("Binary gate loaded on %s with classes %s", device, classes)
+    return model, classes, scaler_info
+
+
+def _predict_gate(audio_path: str) -> tuple[np.ndarray, dict]:
+    import torch
+
+    mel, mel_debug = _compute_mel_spectrogram(audio_path)
+    mel_norm, norm_debug = _normalize_mel(mel)
+
+    mel_input = mel_norm.reshape(1, 1, CNN_IMG_HEIGHT, CNN_IMG_WIDTH)
+    mel_tensor = torch.tensor(mel_input, dtype=torch.float32).to(_get_device())
+
+    with torch.no_grad():
+        logits = _gate_model(mel_tensor)
+        danger_prob = torch.sigmoid(logits).cpu().numpy()[0][0]
+        probabilities = np.array([1 - danger_prob, danger_prob])
+
+    return probabilities, mel_debug
 
 
 def _get_device():
@@ -279,9 +395,47 @@ def _extract_yamnet_features(yamnet, signal: np.ndarray) -> np.ndarray:
 def load_model() -> None:
     global _cnn_model, _cnn_classes, _cnn_scaler_info, _model_type
     global _yamnet_tf_model, _yamnet_pipeline, _yamnet_classes, _yamnet_scaler, _yamnet_feature_version
+    global _gate_model, _gate_classes, _gate_scaler_info, _gate_threshold
+    global _classifier_confidence_threshold, _classifier_margin_threshold
 
     if _cnn_model is not None or _yamnet_pipeline is not None:
+        if _gate_model is None and os.path.exists(GATE_MODEL_PATH_PTH):
+            try:
+                _gate_model, _gate_classes, _gate_scaler_info = _load_gate_model()
+                if os.path.exists(GATE_THRESHOLD_JSON):
+                    with open(GATE_THRESHOLD_JSON) as f:
+                        import json
+                        data = json.load(f)
+                        _gate_threshold = data.get("best_threshold", 0.5)
+                logger.info("Binary gate loaded with threshold=%.2f", _gate_threshold)
+            except Exception as exc:
+                logger.exception("Failed to load gate model")
+                _gate_model = None
+        if _classifier_confidence_threshold is None and os.path.exists(CLASSIFIER_THRESHOLD_JSON):
+            try:
+                with open(CLASSIFIER_THRESHOLD_JSON) as f:
+                    import json
+                    data = json.load(f)
+                    _classifier_confidence_threshold = data.get("confidence_threshold")
+                    _classifier_margin_threshold = data.get("margin_threshold")
+                logger.info("Classifier thresholds loaded: conf=%.2f margin=%.2f",
+                            _classifier_confidence_threshold, _classifier_margin_threshold)
+            except Exception as exc:
+                logger.exception("Failed to load classifier thresholds")
         return
+
+    if os.path.exists(GATE_MODEL_PATH_PTH):
+        try:
+            _gate_model, _gate_classes, _gate_scaler_info = _load_gate_model()
+            if os.path.exists(GATE_THRESHOLD_JSON):
+                with open(GATE_THRESHOLD_JSON) as f:
+                    import json
+                    data = json.load(f)
+                    _gate_threshold = data.get("best_threshold", 0.5)
+            logger.info("Binary gate loaded with threshold=%.2f", _gate_threshold)
+        except Exception as exc:
+            logger.exception("Failed to load gate model")
+            _gate_model = None
 
     if os.path.exists(YAMNET_MODEL_PATH) and os.path.exists(YAMNET_TF_MODEL_DIR):
         logger.info("Loading YAMNet classifier from %s", YAMNET_MODEL_PATH)
@@ -305,6 +459,14 @@ def load_model() -> None:
             _cnn_model, _cnn_classes, _cnn_scaler_info = _load_pytorch_model()
             _model_type = "pytorch"
             logger.info("PyTorch model loaded. Classes: %s", [str(c) for c in _cnn_classes])
+            if os.path.exists(CLASSIFIER_THRESHOLD_JSON):
+                with open(CLASSIFIER_THRESHOLD_JSON) as f:
+                    import json
+                    data = json.load(f)
+                    _classifier_confidence_threshold = data.get("confidence_threshold")
+                    _classifier_margin_threshold = data.get("margin_threshold")
+                logger.info("Classifier thresholds loaded: conf=%.2f margin=%.2f",
+                            _classifier_confidence_threshold, _classifier_margin_threshold)
             return
         except Exception as exc:
             logger.exception("Failed to load PyTorch model")
@@ -410,6 +572,25 @@ def predict(audio_path: str) -> dict[str, Any]:
 
     audio_info = get_audio_info(audio_path)
 
+    gate_threshold = float(_gate_threshold) if _gate_model is not None else 0.0
+    gate_decision = "unknown"
+
+    if _gate_model is not None:
+        gate_probs, _ = _predict_gate(audio_path)
+        danger_prob = float(gate_probs[1]) if len(gate_probs) > 1 else float(gate_probs[0])
+        gate_decision = "passed" if danger_prob >= _gate_threshold else "filtered"
+        if danger_prob < _gate_threshold:
+            return {
+                "prediction": "normal",
+                "confidence": float(danger_prob),
+                "probabilities": {"non_danger": float(1 - danger_prob), "danger": float(danger_prob)},
+                "feature_version": "gate_filter",
+                "is_danger": False,
+                "danger_probability": float(danger_prob),
+                "gate_threshold": gate_threshold,
+                "gate_decision": gate_decision,
+            }
+
     if _model_type == "yamnet":
         probabilities, _debug = _predict_yamnet(audio_path)
     elif _model_type == "pytorch":
@@ -422,19 +603,53 @@ def predict(audio_path: str) -> dict[str, Any]:
     predicted_idx = int(np.argmax(probabilities))
     class_labels = [str(c) for c in (_yamnet_classes or _cnn_classes)]
     predicted_label = class_labels[predicted_idx]
+    confidence = float(probabilities[predicted_idx])
 
     feature_version = {
         "pytorch": "cnn_mel_128x128_v2",
         "yamnet": _yamnet_feature_version or "yamnet_521_1024_hybrid_v1",
     }.get(_model_type or "", FEATURE_VERSION)
 
+    sorted_probs = np.sort(probabilities)
+    margin = float(sorted_probs[-1] - sorted_probs[-2])
+
+    if _classifier_confidence_threshold is not None and confidence < _classifier_confidence_threshold:
+        return {
+            "prediction": "normal",
+            "confidence": confidence,
+            "probabilities": {label: float(prob) for label, prob in zip(class_labels, probabilities)},
+            "feature_version": feature_version,
+            "is_danger": False,
+            "danger_probability": confidence,
+            "gate_threshold": gate_threshold,
+            "gate_decision": gate_decision,
+            "reason": "low_confidence",
+        }
+
+    if _classifier_margin_threshold is not None and margin < _classifier_margin_threshold:
+        return {
+            "prediction": "normal",
+            "confidence": confidence,
+            "probabilities": {label: float(prob) for label, prob in zip(class_labels, probabilities)},
+            "feature_version": feature_version,
+            "is_danger": False,
+            "danger_probability": confidence,
+            "gate_threshold": gate_threshold,
+            "gate_decision": gate_decision,
+            "reason": "low_margin",
+        }
+
     return {
         "prediction": predicted_label,
-        "confidence": float(probabilities[predicted_idx]),
+        "confidence": confidence,
         "probabilities": {
             label: float(prob) for label, prob in zip(class_labels, probabilities)
         },
         "feature_version": feature_version,
+        "is_danger": True,
+        "danger_probability": 1.0,
+        "gate_threshold": gate_threshold,
+        "gate_decision": gate_decision,
     }
 
 
@@ -442,6 +657,34 @@ def predict_with_debug(audio_path: str) -> dict[str, Any]:
     load_model()
 
     audio_info = get_audio_info(audio_path)
+    gate_debug = {}
+
+    if _gate_model is not None:
+        gate_probs, gate_mel_debug = _predict_gate(audio_path)
+        danger_prob = float(gate_probs[1]) if len(gate_probs) > 1 else float(gate_probs[0])
+        gate_debug = {
+            "gate_probabilities": {"non_danger": float(1 - danger_prob), "danger": float(danger_prob)},
+            "gate_danger_probability": float(danger_prob),
+            "gate_threshold": float(_gate_threshold),
+            "gate_passed": bool(danger_prob >= _gate_threshold),
+            "gate_mel_debug": gate_mel_debug,
+        }
+        if danger_prob < _gate_threshold:
+            return {
+                "audio_info": audio_info,
+                "feature_shape": gate_mel_debug.get("mel_resized_shape", [CNN_IMG_HEIGHT, CNN_IMG_WIDTH]),
+                "feature_version": "gate_filter",
+                "model_feature_version": "gate_filter",
+                "model_sample_rate": CNN_SAMPLE_RATE,
+                "model_classes": ["non_danger", "danger"],
+                "class_probabilities": {"non_danger": float(1 - danger_prob), "danger": float(danger_prob)},
+                "predicted_class": "normal",
+                "confidence": float(danger_prob),
+                "warnings": ["Filtered by gate model"],
+                "debug": gate_debug,
+                "is_danger": False,
+                "danger_probability": float(danger_prob),
+            }
 
     if _model_type == "yamnet":
         probabilities, debug_info = _predict_yamnet(audio_path, debug=True)
@@ -493,7 +736,9 @@ def predict_with_debug(audio_path: str) -> dict[str, Any]:
         "predicted_class": predicted_label,
         "confidence": float(probabilities[predicted_idx]),
         "warnings": [],
-        "debug": debug_info,
+        "debug": {**gate_debug, **debug_info} if gate_debug else debug_info,
+        "is_danger": True,
+        "danger_probability": 1.0,
     }
 
 

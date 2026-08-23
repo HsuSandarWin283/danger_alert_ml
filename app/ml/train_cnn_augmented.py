@@ -34,7 +34,7 @@ if _IN_COLAB:
 
     APP_DIR = project_root / 'app'
     ML_DIR = APP_DIR / 'ml'
-    CUSTOM_DATASET_DIR = project_root / 'dataset'
+    CUSTOM_DATASET_DIR = APP_DIR / 'dataset'
 
     for esc50_candidate in [
         CUSTOM_DATASET_DIR / 'ESC-50',
@@ -81,12 +81,7 @@ try:
 except ImportError:
     pass
 
-APP_DIR = Path(__file__).resolve().parents[1]
-ML_DIR = Path(__file__).resolve().parent
-ESC50_DIR = APP_DIR / "database" / "ESC-50-master"
-CUSTOM_DATASET_DIR = APP_DIR / "dataset"
-META_FILE = ESC50_DIR / "meta" / "esc50.csv"
-AUDIO_DIR = ESC50_DIR / "audio"
+
 
 OUTPUT_MODEL_PATH = ML_DIR / "danger_sound_cnn_model.pth"
 OUTPUT_CLASSES_PATH = ML_DIR / "cnn_classes.pkl"
@@ -113,13 +108,10 @@ BG_CATEGORIES = [
     "crow", "dog", "cat", "footsteps", "clock_tick",
 ]
 
-ACCIDENT_SOUND_CATEGORIES = ["glass_breaking", "car_horn"]
-DANGER_EXCLUDED_CATEGORIES = {
-    "gunshot", "siren", "chainsaw", "fireworks", "crying_baby",
-    "glass_breaking", "car_horn",
-}
-
-NORMAL_SAMPLE_COUNT = 400
+NORMAL_SAMPLE_COUNT = 1000
+GUNSHOT_SAMPLE_COUNT = 200
+SCREAM_SAMPLE_COUNT = 210
+ACCIDENT_SAMPLE_COUNT = 200
 MIX_PROB = 0.7
 SNR_RANGE = (5.0, 20.0)
 VOLUME_RANGE = (0.8, 1.2)
@@ -212,14 +204,18 @@ def load_esc50_by_category() -> dict[str, list[Path]]:
     return by_cat
 
 
-def collect_custom_files(folder_name: str) -> list[Path]:
+def collect_custom_files(folder_name: str, max_count: int | None = None) -> list[Path]:
     folder = CUSTOM_DATASET_DIR / folder_name
     if not folder.exists():
         return []
-    return sorted(
+    files = sorted(
         p for p in folder.iterdir()
         if p.is_file() and p.suffix.lower() in AUDIO_EXTENSIONS
     )
+    if max_count is not None and len(files) > max_count:
+        random.shuffle(files)
+        files = files[:max_count]
+    return files
 
 
 def collect_accident_subdir_files() -> dict[str, list[Path]]:
@@ -241,8 +237,7 @@ def collect_accident_subdir_files() -> dict[str, list[Path]]:
 def select_normal_files(esc50: dict[str, list[Path]], target_count: int = NORMAL_SAMPLE_COUNT) -> list[Path]:
     normal_paths: list[Path] = []
     for cat, files in esc50.items():
-        if cat not in DANGER_EXCLUDED_CATEGORIES and cat not in BG_CATEGORIES:
-            normal_paths.extend(files)
+        normal_paths.extend(files)
     random.shuffle(normal_paths)
     sampled = normal_paths[:target_count]
     return sampled
@@ -508,9 +503,9 @@ def main() -> None:
     esc50 = load_esc50_by_category()
     log(f"ESC-50 categories loaded: {len(esc50)}", lines)
 
-    gunshot_paths = collect_custom_files("Gunshot")
-    scream_paths = collect_custom_files("Scream")
-    accident_paths = collect_custom_files("Accident")
+    gunshot_paths = collect_custom_files("Gunshot", GUNSHOT_SAMPLE_COUNT)
+    scream_paths = collect_custom_files("Scream", SCREAM_SAMPLE_COUNT)
+    accident_paths = collect_custom_files("Accident", ACCIDENT_SAMPLE_COUNT)
 
     log(f"Gunshot files: {len(gunshot_paths)}", lines)
     log(f"Scream files: {len(scream_paths)}", lines)
@@ -523,11 +518,6 @@ def main() -> None:
     for cat in BG_CATEGORIES:
         bg_pool.extend(esc50.get(cat, []))
     log(f"Background pool: {len(bg_pool)} files ({len(BG_CATEGORIES)} categories)", lines)
-
-    accident_sound_pool: list[Path] = []
-    for cat in ACCIDENT_SOUND_CATEGORIES:
-        accident_sound_pool.extend(esc50.get(cat, []))
-    log(f"Accident sound pool (glass_breaking + car_horn): {len(accident_sound_pool)} files", lines)
 
     log("\n=== PHASE 1: Load original audio into memory ===", lines)
 
@@ -559,16 +549,6 @@ def main() -> None:
             bg_loaded[cat] = sigs
     log(f"  Background categories loaded: {len(bg_loaded)}", lines)
 
-    accident_sound_loaded: dict[str, list[np.ndarray]] = {}
-    for cat in ACCIDENT_SOUND_CATEGORIES:
-        sigs = []
-        for p in esc50.get(cat, []):
-            s = load_audio_file(p)
-            if s is not None:
-                sigs.append(s)
-        if sigs:
-            accident_sound_loaded[cat] = sigs
-
     bg_flat: list[np.ndarray] = []
     for sigs in bg_loaded.values():
         bg_flat.extend(sigs)
@@ -582,6 +562,15 @@ def main() -> None:
     log(f"  ESC50_DIR: {ESC50_DIR}", lines)
     log(f"  META_FILE: {META_FILE}", lines)
     log(f"  META_FILE exists: {META_FILE.exists()}", lines)
+
+    log(f"\nDataset mapping:", lines)
+    log(f"  DANGER classes (custom dataset):", lines)
+    log(f"    accident <- dataset/Accident/", lines)
+    log(f"    gunshot  <- dataset/Gunshot/", lines)
+    log(f"    scream   <- dataset/Scream/", lines)
+    log(f"  NORMAL class (ESC-50, all categories):", lines)
+    for cat in sorted(esc50.keys()):
+        log(f"    {cat} -> normal", lines)
 
     total_danger = len(gunshot_originals) + len(scream_originals) + len(accident_originals)
     total_originals = total_danger + len(normal_originals)
@@ -652,17 +641,17 @@ def main() -> None:
     log("\n=== PHASE 4: Create Datasets ===", lines)
 
     train_dataset = OnTheFlyAudioDataset(
-        train_data, bg_flat, accident_sound_loaded,
+        train_data, bg_flat, {},
         classes, class_to_idx, mean_val, std_val,
         augment=True, mix_prob=MIX_PROB,
     )
     val_dataset = OnTheFlyAudioDataset(
-        val_data, bg_flat, accident_sound_loaded,
+        val_data, bg_flat, {},
         classes, class_to_idx, mean_val, std_val,
         augment=False, mix_prob=0.0,
     )
     test_dataset = OnTheFlyAudioDataset(
-        test_data, bg_flat, accident_sound_loaded,
+        test_data, bg_flat, {},
         classes, class_to_idx, mean_val, std_val,
         augment=False, mix_prob=0.0,
     )
@@ -725,12 +714,12 @@ def main() -> None:
         fold_val = [train_data[i] for i in vl_idx]
 
         fold_train_ds = OnTheFlyAudioDataset(
-            fold_train, bg_flat, accident_sound_loaded,
+            fold_train, bg_flat, {},
             classes, class_to_idx, mean_val, std_val,
             augment=True, mix_prob=MIX_PROB,
         )
         fold_val_ds = OnTheFlyAudioDataset(
-            fold_val, bg_flat, accident_sound_loaded,
+            fold_val, bg_flat, {},
             classes, class_to_idx, mean_val, std_val,
             augment=False, mix_prob=0.0,
         )
@@ -877,7 +866,7 @@ def main() -> None:
     log("\n=== PHASE 7: Train Final Model on Full Training Set ===", lines)
 
     full_train_ds = OnTheFlyAudioDataset(
-        train_data, bg_flat, accident_sound_loaded,
+        train_data, bg_flat, {},
         classes, class_to_idx, mean_val, std_val,
         augment=True, mix_prob=MIX_PROB,
     )

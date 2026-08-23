@@ -64,8 +64,32 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+DANGER_LABELS = {"accident", "gunshot", "scream", "glass_break"}
+DANGER_CONFIDENCE_THRESHOLD = 0.88
 DEBUG_AUDIO_DIR = Path(__file__).resolve().parent / "app" / "ml" / "debug_audio"
 _model_loaded = False
+
+_predict_count = 0
+PREDICT_INITIAL_IGNORE_COUNT = 5
+
+_recent_predictions = []
+RECENT_PREDICTIONS_MAX = 3
+_last_result_cache = None
+
+
+def _should_skip_prediction(filename: str, prediction: str, confidence: float, result: dict | None = None) -> dict | None:
+    global _recent_predictions, _last_result_cache
+    current = (filename, prediction, round(confidence, 2))
+    _recent_predictions.append(current)
+    if result is not None:
+        _last_result_cache = result
+    if len(_recent_predictions) > RECENT_PREDICTIONS_MAX:
+        _recent_predictions.pop(0)
+    if len(_recent_predictions) == RECENT_PREDICTIONS_MAX:
+        if all(p == _recent_predictions[0] for p in _recent_predictions):
+            logger.info("[predict] skipped duplicate result filename=%s prediction=%s confidence=%.4f", filename, prediction, confidence)
+            return _last_result_cache
+    return None
 
 
 @app.on_event("startup")
@@ -119,17 +143,80 @@ async def predict_sound(file: UploadFile = File(...)):
 
     try:
         tmp_path = _save_upload(file)
+        file_size = os.path.getsize(tmp_path) if tmp_path else 0
+        logger.info("[predict] POST /predict received filename=%s size=%d bytes", file.filename, file_size)
 
-        _save_debug_audio(tmp_path, file.filename or "unknown.wav")
+        global _predict_count
+        _predict_count += 1
+        if _predict_count <= PREDICT_INITIAL_IGNORE_COUNT:
+            logger.info("[predict] ignored initial prediction count=%d filename=%s", _predict_count, file.filename)
+            return JSONResponse(content={
+                "prediction": "normal",
+                "confidence": 0.0,
+                "probabilities": {},
+                "feature_version": "init_ignore",
+                "is_danger": False,
+                "danger_probability": 0.0,
+                "gate_threshold": 0.0,
+                "gate_decision": "ignored",
+                "reason": "initial_warmup",
+                "ignored_duplicate": True,
+                "warmup_remaining": PREDICT_INITIAL_IGNORE_COUNT - _predict_count,
+            })
 
+        logger.info("[predict] prediction started filename=%s", file.filename)
+        t0 = time.time()
         result = predict(tmp_path)
+        elapsed = time.time() - t0
         logger.info(
-            "[predict] filename=%s prediction=%s confidence=%.4f probs=%s",
+            "[predict] prediction completed in %.3f sec filename=%s prediction=%s confidence=%.4f probs=%s gate_prob=%.4f gate_thresh=%.2f gate_decision=%s reason=%s",
+            elapsed,
             file.filename,
             result["prediction"],
             result["confidence"],
             {k: f"{v:.4f}" for k, v in result.get("probabilities", {}).items()},
+            result.get("danger_probability", 0.0),
+            result.get("gate_threshold", 0.0),
+            result.get("gate_decision", "unknown"),
+            result.get("reason", "none"),
         )
+
+        skip_key = _should_skip_prediction(
+            file.filename or "unknown.wav",
+            result["prediction"],
+            result["confidence"],
+            result,
+        )
+        if skip_key is not None:
+            result["ignored_duplicate"] = True
+        else:
+            result["ignored_duplicate"] = False
+
+        if result.get("is_danger") and not result.get("ignored_duplicate"):
+            _save_debug_audio(tmp_path, file.filename or "unknown.wav")
+            logger.info(
+                "[debug-audio] saved danger detection filename=%s prediction=%s confidence=%.4f reason=%s",
+                file.filename,
+                result.get("prediction"),
+                result.get("confidence", 0),
+                result.get("reason", "unknown"),
+            )
+        elif result.get("ignored_duplicate"):
+            logger.info(
+                "[debug-audio] skipped duplicate filename=%s prediction=%s confidence=%.4f",
+                file.filename,
+                result.get("prediction"),
+                result.get("confidence", 0),
+            )
+        else:
+            logger.info(
+                "[debug-audio] skipped non-danger filename=%s prediction=%s confidence=%.4f reason=%s",
+                file.filename,
+                result.get("prediction"),
+                result.get("confidence", 0),
+                result.get("reason", "unknown"),
+            )
+
         return JSONResponse(content=result)
 
     except HTTPException:

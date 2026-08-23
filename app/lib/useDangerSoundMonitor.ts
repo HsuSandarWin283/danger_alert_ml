@@ -170,7 +170,7 @@ export function useDangerSoundMonitor(
   const lastAnalysisTimeRef = useRef<number>(0);
   const dangerStateRef = useRef<'NORMAL' | 'DANGER'>('NORMAL');
   const lastDangerTimeRef = useRef<number>(0);
-  const WARMUP_MS = 3000;
+  const WARMUP_MS = 5000;
   const MONITORING_KEY = 'danger_monitoring_active';
 
   const stopMonitoring = useCallback(() => {
@@ -225,6 +225,7 @@ export function useDangerSoundMonitor(
     dangerStateRef.current = 'NORMAL';
     lastDangerTimeRef.current = 0;
     lastAnalysisTimeRef.current = 0;
+    startTimeRef.current = 0;
 
     if (Capacitor.isNativePlatform()) {
  BackgroundMonitor.stopMonitoring().catch(() => {});
@@ -616,6 +617,7 @@ export function useDangerSoundMonitor(
       };
 
       intervalRef.current = window.setInterval(scheduleAnalysis, ANALYSIS_HOP_MS);
+      startTimeRef.current = Date.now();
       lastAnalysisTimeRef.current = Date.now();
       setIsRecording(true);
       setIsMonitoring(true);

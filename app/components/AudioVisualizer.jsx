@@ -113,9 +113,7 @@ export default function AudioVisualizer() {
           <div className="bg-gray-50 rounded-xl p-4">
             <p className="text-sm text-gray-500">{t('lastPrediction')}</p>
             <p className="text-xl font-bold">
-              {lastPrediction
-                ? `${lastPrediction.prediction} (${Math.round(lastPrediction.confidence * 100)}%)`
-                : t('waitingForDetection')}
+              {lastPrediction ? lastPrediction.prediction : t('waitingForDetection')}
             </p>
           </div>
         </div>

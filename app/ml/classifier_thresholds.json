@@ -1,0 +1,15 @@
+{
+  "confidence_threshold": 0.4,
+  "margin_threshold": 0.0,
+  "validation_metrics": {
+    "confidence": 0.4,
+    "margin": 0.0,
+    "macro_f1": 1.0,
+    "accepted_rate": 1.0
+  },
+  "classes": [
+    "accident",
+    "gunshot",
+    "scream"
+  ]
+}

@@ -1,0 +1,1307 @@
+{
+  "total_tested": 100,
+  "false_positives": 14,
+  "fp_rate": 0.14,
+  "results": [
+    {
+      "file": "3-140199-A-8.wav",
+      "category": "sheep",
+      "prediction": "normal",
+      "confidence": 0.36286741495132446,
+      "probabilities": {
+        "accident": 0.3566407859325409,
+        "gunshot": 0.0007221405394375324,
+        "normal": 0.36286741495132446,
+        "scream": 0.27976956963539124
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "3-142604-A-24.wav",
+      "category": "coughing",
+      "prediction": "normal",
+      "confidence": 0.997787356376648,
+      "probabilities": {
+        "accident": 0.0003220951766707003,
+        "gunshot": 0.00030616234289482236,
+        "normal": 0.997787356376648,
+        "scream": 0.0015843213768675923
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "5-178997-A-24.wav",
+      "category": "coughing",
+      "prediction": "normal",
+      "confidence": 0.9915800094604492,
+      "probabilities": {
+        "accident": 0.0025423364713788033,
+        "gunshot": 0.0001393944548908621,
+        "normal": 0.9915800094604492,
+        "scream": 0.0057382830418646336
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "3-104632-A-12.wav",
+      "category": "crackling_fire",
+      "prediction": "normal",
+      "confidence": 0.998212456703186,
+      "probabilities": {
+        "accident": 0.0003436534316278994,
+        "gunshot": 9.221483196597546e-05,
+        "normal": 0.998212456703186,
+        "scream": 0.001351712504401803
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "5-218494-A-22.wav",
+      "category": "clapping",
+      "prediction": "gunshot",
+      "confidence": 0.980541467666626,
+      "probabilities": {
+        "accident": 0.018896514549851418,
+        "gunshot": 0.980541467666626,
+        "normal": 0.0005584777682088315,
+        "scream": 3.4548281746538123e-06
+      },
+      "is_false_positive": true
+    },
+    {
+      "file": "5-263831-B-6.wav",
+      "category": "hen",
+      "prediction": "normal",
+      "confidence": 0.9583576321601868,
+      "probabilities": {
+        "accident": 0.00014519051183015108,
+        "gunshot": 6.810262675571721e-06,
+        "normal": 0.9583576321601868,
+        "scream": 0.041490353643894196
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "5-249748-A-28.wav",
+      "category": "snoring",
+      "prediction": "normal",
+      "confidence": 0.6064115762710571,
+      "probabilities": {
+        "accident": 0.010456420481204987,
+        "gunshot": 0.00015740536036901176,
+        "normal": 0.6064115762710571,
+        "scream": 0.3829745352268219
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "4-189836-A-22.wav",
+      "category": "clapping",
+      "prediction": "gunshot",
+      "confidence": 0.9997859597206116,
+      "probabilities": {
+        "accident": 0.0002140768920071423,
+        "gunshot": 0.9997859597206116,
+        "normal": 3.924969149693425e-08,
+        "scream": 7.67137004961671e-13
+      },
+      "is_false_positive": true
+    },
+    {
+      "file": "2-76408-B-22.wav",
+      "category": "clapping",
+      "prediction": "normal",
+      "confidence": 1.0,
+      "probabilities": {
+        "accident": 2.1530047709938938e-12,
+        "gunshot": 6.747276071195074e-09,
+        "normal": 1.0,
+        "scream": 1.5129080210840584e-08
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "3-149042-A-24.wav",
+      "category": "coughing",
+      "prediction": "normal",
+      "confidence": 0.9286242127418518,
+      "probabilities": {
+        "accident": 0.00024634276633150876,
+        "gunshot": 9.41616963245906e-06,
+        "normal": 0.9286242127418518,
+        "scream": 0.07112009078264236
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "2-52085-A-4.wav",
+      "category": "frog",
+      "prediction": "normal",
+      "confidence": 0.982231855392456,
+      "probabilities": {
+        "accident": 0.0003986711089964956,
+        "gunshot": 3.5335902794031426e-05,
+        "normal": 0.982231855392456,
+        "scream": 0.017334114760160446
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "5-242932-B-26.wav",
+      "category": "laughing",
+      "prediction": "normal",
+      "confidence": 0.9928705096244812,
+      "probabilities": {
+        "accident": 0.0010316094849258661,
+        "gunshot": 4.657112367567606e-05,
+        "normal": 0.9928705096244812,
+        "scream": 0.006051404867321253
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "3-118069-B-27.wav",
+      "category": "brushing_teeth",
+      "prediction": "accident",
+      "confidence": 0.5160536170005798,
+      "probabilities": {
+        "accident": 0.5160536170005798,
+        "gunshot": 0.003714705351740122,
+        "normal": 0.4548056423664093,
+        "scream": 0.02542600966989994
+      },
+      "is_false_positive": true
+    },
+    {
+      "file": "4-197871-A-15.wav",
+      "category": "water_drops",
+      "prediction": "normal",
+      "confidence": 0.9886610507965088,
+      "probabilities": {
+        "accident": 0.0006457936833612621,
+        "gunshot": 0.0001634284999454394,
+        "normal": 0.9886610507965088,
+        "scream": 0.010529778897762299
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "1-69641-A-3.wav",
+      "category": "cow",
+      "prediction": "normal",
+      "confidence": 0.9989768266677856,
+      "probabilities": {
+        "accident": 0.00011188499047420919,
+        "gunshot": 6.526436482090503e-05,
+        "normal": 0.9989768266677856,
+        "scream": 0.0008460484677925706
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "4-172500-C-27.wav",
+      "category": "brushing_teeth",
+      "prediction": "normal",
+      "confidence": 0.5912112593650818,
+      "probabilities": {
+        "accident": 0.2037915587425232,
+        "gunshot": 0.003301879158243537,
+        "normal": 0.5912112593650818,
+        "scream": 0.2016952782869339
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "5-219242-B-37.wav",
+      "category": "clock_alarm",
+      "prediction": "normal",
+      "confidence": 0.9718695282936096,
+      "probabilities": {
+        "accident": 0.004357812460511923,
+        "gunshot": 0.003031232627108693,
+        "normal": 0.9718695282936096,
+        "scream": 0.020741388201713562
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "1-4211-A-12.wav",
+      "category": "crackling_fire",
+      "prediction": "normal",
+      "confidence": 0.9759182929992676,
+      "probabilities": {
+        "accident": 0.015976905822753906,
+        "gunshot": 0.006713992450386286,
+        "normal": 0.9759182929992676,
+        "scream": 0.0013908033724874258
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "2-118817-A-32.wav",
+      "category": "keyboard_typing",
+      "prediction": "normal",
+      "confidence": 0.6851224303245544,
+      "probabilities": {
+        "accident": 0.3094277083873749,
+        "gunshot": 0.00047597254160791636,
+        "normal": 0.6851224303245544,
+        "scream": 0.004973891656845808
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "5-223176-A-37.wav",
+      "category": "clock_alarm",
+      "prediction": "normal",
+      "confidence": 0.9975029826164246,
+      "probabilities": {
+        "accident": 1.565835191286169e-05,
+        "gunshot": 8.233606422436424e-06,
+        "normal": 0.9975029826164246,
+        "scream": 0.00247309566475451
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "5-194899-D-3.wav",
+      "category": "cow",
+      "prediction": "normal",
+      "confidence": 0.983674943447113,
+      "probabilities": {
+        "accident": 0.0009008995839394629,
+        "gunshot": 0.00012311694445088506,
+        "normal": 0.983674943447113,
+        "scream": 0.015300956554710865
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "3-118194-A-33.wav",
+      "category": "door_wood_creaks",
+      "prediction": "normal",
+      "confidence": 0.6184847950935364,
+      "probabilities": {
+        "accident": 0.09192316234111786,
+        "gunshot": 0.13306701183319092,
+        "normal": 0.6184847950935364,
+        "scream": 0.15652494132518768
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "4-164243-A-26.wav",
+      "category": "laughing",
+      "prediction": "normal",
+      "confidence": 0.9921985268592834,
+      "probabilities": {
+        "accident": 0.00012341351248323917,
+        "gunshot": 1.2821151358366478e-05,
+        "normal": 0.9921985268592834,
+        "scream": 0.007665214594453573
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "3-103401-C-33.wav",
+      "category": "door_wood_creaks",
+      "prediction": "normal",
+      "confidence": 0.9517949819564819,
+      "probabilities": {
+        "accident": 0.00447769183665514,
+        "gunshot": 0.0008097118115983903,
+        "normal": 0.9517949819564819,
+        "scream": 0.04291761666536331
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "3-171281-A-6.wav",
+      "category": "hen",
+      "prediction": "normal",
+      "confidence": 0.9098173379898071,
+      "probabilities": {
+        "accident": 0.0004394303250592202,
+        "gunshot": 4.927719055558555e-05,
+        "normal": 0.9098173379898071,
+        "scream": 0.08969394117593765
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "4-155650-B-24.wav",
+      "category": "coughing",
+      "prediction": "normal",
+      "confidence": 0.9825996160507202,
+      "probabilities": {
+        "accident": 0.0002128946507582441,
+        "gunshot": 1.913969754241407e-05,
+        "normal": 0.9825996160507202,
+        "scream": 0.017168337479233742
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "4-151242-A-37.wav",
+      "category": "clock_alarm",
+      "prediction": "normal",
+      "confidence": 0.9840918779373169,
+      "probabilities": {
+        "accident": 0.001744112349115312,
+        "gunshot": 0.00010104222019435838,
+        "normal": 0.9840918779373169,
+        "scream": 0.014063029550015926
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "3-98771-A-18.wav",
+      "category": "toilet_flush",
+      "prediction": "normal",
+      "confidence": 0.9975376129150391,
+      "probabilities": {
+        "accident": 0.00031502614729106426,
+        "gunshot": 4.145644561504014e-05,
+        "normal": 0.9975376129150391,
+        "scream": 0.00210592127405107
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "3-197408-B-8.wav",
+      "category": "sheep",
+      "prediction": "normal",
+      "confidence": 0.9109550714492798,
+      "probabilities": {
+        "accident": 0.022307563573122025,
+        "gunshot": 0.0029070256277918816,
+        "normal": 0.9109550714492798,
+        "scream": 0.06383033096790314
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "3-97909-B-49.wav",
+      "category": "hand_saw",
+      "prediction": "normal",
+      "confidence": 0.9960662722587585,
+      "probabilities": {
+        "accident": 0.0004122618702240288,
+        "gunshot": 3.041796117031481e-05,
+        "normal": 0.9960662722587585,
+        "scream": 0.0034910584799945354
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "1-84393-A-32.wav",
+      "category": "keyboard_typing",
+      "prediction": "normal",
+      "confidence": 0.7338584065437317,
+      "probabilities": {
+        "accident": 0.25909847021102905,
+        "gunshot": 0.0005859822267666459,
+        "normal": 0.7338584065437317,
+        "scream": 0.006457140669226646
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "5-156026-C-4.wav",
+      "category": "frog",
+      "prediction": "normal",
+      "confidence": 0.959682285785675,
+      "probabilities": {
+        "accident": 0.011623579077422619,
+        "gunshot": 0.00033288789563812315,
+        "normal": 0.959682285785675,
+        "scream": 0.028361208736896515
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "3-120526-B-37.wav",
+      "category": "clock_alarm",
+      "prediction": "normal",
+      "confidence": 0.6369408369064331,
+      "probabilities": {
+        "accident": 0.00267494167201221,
+        "gunshot": 6.412883521988988e-05,
+        "normal": 0.6369408369064331,
+        "scream": 0.3603200912475586
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "2-102414-G-17.wav",
+      "category": "pouring_water",
+      "prediction": "normal",
+      "confidence": 0.9727627635002136,
+      "probabilities": {
+        "accident": 0.004913804586976767,
+        "gunshot": 0.0003711991885211319,
+        "normal": 0.9727627635002136,
+        "scream": 0.021952252835035324
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "4-250869-A-2.wav",
+      "category": "pig",
+      "prediction": "normal",
+      "confidence": 0.9888495802879333,
+      "probabilities": {
+        "accident": 0.001217673416249454,
+        "gunshot": 0.0010256728855893016,
+        "normal": 0.9888495802879333,
+        "scream": 0.008907062001526356
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "1-40621-A-28.wav",
+      "category": "snoring",
+      "prediction": "accident",
+      "confidence": 0.7949161529541016,
+      "probabilities": {
+        "accident": 0.7949161529541016,
+        "gunshot": 0.01201301533728838,
+        "normal": 0.17932698130607605,
+        "scream": 0.013743946328759193
+      },
+      "is_false_positive": true
+    },
+    {
+      "file": "2-158746-A-2.wav",
+      "category": "pig",
+      "prediction": "normal",
+      "confidence": 0.9615800380706787,
+      "probabilities": {
+        "accident": 0.0011045801220461726,
+        "gunshot": 8.395219629164785e-05,
+        "normal": 0.9615800380706787,
+        "scream": 0.037231527268886566
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "3-180147-A-30.wav",
+      "category": "door_wood_knock",
+      "prediction": "normal",
+      "confidence": 0.9949144124984741,
+      "probabilities": {
+        "accident": 0.003574726637452841,
+        "gunshot": 0.00020468723960220814,
+        "normal": 0.9949144124984741,
+        "scream": 0.0013062253128737211
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "4-181628-A-17.wav",
+      "category": "pouring_water",
+      "prediction": "normal",
+      "confidence": 0.9989935755729675,
+      "probabilities": {
+        "accident": 8.053330384427682e-05,
+        "gunshot": 2.9444419851643033e-05,
+        "normal": 0.9989935755729675,
+        "scream": 0.000896546000149101
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "1-7974-A-49.wav",
+      "category": "hand_saw",
+      "prediction": "normal",
+      "confidence": 0.9456663131713867,
+      "probabilities": {
+        "accident": 0.00012774550123140216,
+        "gunshot": 7.427607670251746e-06,
+        "normal": 0.9456663131713867,
+        "scream": 0.05419851839542389
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "2-119102-A-21.wav",
+      "category": "sneezing",
+      "prediction": "normal",
+      "confidence": 0.9705893993377686,
+      "probabilities": {
+        "accident": 0.008374962955713272,
+        "gunshot": 0.012044118717312813,
+        "normal": 0.9705893993377686,
+        "scream": 0.008991519920527935
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "3-132601-A-24.wav",
+      "category": "coughing",
+      "prediction": "normal",
+      "confidence": 0.9982458353042603,
+      "probabilities": {
+        "accident": 0.0004287447954993695,
+        "gunshot": 0.00015613676805514842,
+        "normal": 0.9982458353042603,
+        "scream": 0.0011692806147038937
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "5-223099-A-32.wav",
+      "category": "keyboard_typing",
+      "prediction": "normal",
+      "confidence": 0.9999833106994629,
+      "probabilities": {
+        "accident": 2.282218147797721e-08,
+        "gunshot": 4.602495664585149e-07,
+        "normal": 0.9999833106994629,
+        "scream": 1.6227590094786137e-05
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "1-57795-A-8.wav",
+      "category": "sheep",
+      "prediction": "normal",
+      "confidence": 0.6751664280891418,
+      "probabilities": {
+        "accident": 0.05230959877371788,
+        "gunshot": 0.00020193068485241383,
+        "normal": 0.6751664280891418,
+        "scream": 0.27232202887535095
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "3-155556-A-31.wav",
+      "category": "mouse_click",
+      "prediction": "normal",
+      "confidence": 0.9973115921020508,
+      "probabilities": {
+        "accident": 0.00018336718494538218,
+        "gunshot": 0.00014505731815006584,
+        "normal": 0.9973115921020508,
+        "scream": 0.00236000819131732
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "4-189838-A-22.wav",
+      "category": "clapping",
+      "prediction": "gunshot",
+      "confidence": 0.9999438524246216,
+      "probabilities": {
+        "accident": 5.611969027086161e-05,
+        "gunshot": 0.9999438524246216,
+        "normal": 1.7355712422784109e-09,
+        "scream": 6.946601480210769e-15
+      },
+      "is_false_positive": true
+    },
+    {
+      "file": "4-182368-A-12.wav",
+      "category": "crackling_fire",
+      "prediction": "normal",
+      "confidence": 0.9880736470222473,
+      "probabilities": {
+        "accident": 0.0006030662334524095,
+        "gunshot": 0.0008298011380247772,
+        "normal": 0.9880736470222473,
+        "scream": 0.01049343217164278
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "3-169907-A-29.wav",
+      "category": "drinking_sipping",
+      "prediction": "normal",
+      "confidence": 0.999645471572876,
+      "probabilities": {
+        "accident": 1.4257713701226749e-05,
+        "gunshot": 1.6374586266465485e-05,
+        "normal": 0.999645471572876,
+        "scream": 0.0003239403886254877
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "4-209698-A-37.wav",
+      "category": "clock_alarm",
+      "prediction": "scream",
+      "confidence": 0.8130155205726624,
+      "probabilities": {
+        "accident": 0.007055199239403009,
+        "gunshot": 6.53863389743492e-05,
+        "normal": 0.1798638552427292,
+        "scream": 0.8130155205726624
+      },
+      "is_false_positive": true
+    },
+    {
+      "file": "5-248341-C-6.wav",
+      "category": "hen",
+      "prediction": "normal",
+      "confidence": 0.9999755620956421,
+      "probabilities": {
+        "accident": 4.0118052311299834e-06,
+        "gunshot": 9.835136552283075e-06,
+        "normal": 0.9999755620956421,
+        "scream": 1.0601296708045993e-05
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "1-82817-A-30.wav",
+      "category": "door_wood_knock",
+      "prediction": "normal",
+      "confidence": 0.9991790652275085,
+      "probabilities": {
+        "accident": 5.11973921675235e-05,
+        "gunshot": 6.8797824496869e-05,
+        "normal": 0.9991790652275085,
+        "scream": 0.0007009703549556434
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "4-250864-A-8.wav",
+      "category": "sheep",
+      "prediction": "normal",
+      "confidence": 0.9976710677146912,
+      "probabilities": {
+        "accident": 0.0007188246818259358,
+        "gunshot": 0.0002373943425482139,
+        "normal": 0.9976710677146912,
+        "scream": 0.0013727156911045313
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "4-213193-A-29.wav",
+      "category": "drinking_sipping",
+      "prediction": "normal",
+      "confidence": 0.9965002536773682,
+      "probabilities": {
+        "accident": 0.00034101580968126655,
+        "gunshot": 0.0001787584915291518,
+        "normal": 0.9965002536773682,
+        "scream": 0.0029800559859722853
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "5-253094-A-49.wav",
+      "category": "hand_saw",
+      "prediction": "normal",
+      "confidence": 0.9999995231628418,
+      "probabilities": {
+        "accident": 2.6625313065409273e-09,
+        "gunshot": 5.508258738018412e-08,
+        "normal": 0.9999995231628418,
+        "scream": 4.4525401676764886e-07
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "5-202795-A-3.wav",
+      "category": "cow",
+      "prediction": "normal",
+      "confidence": 0.6865414977073669,
+      "probabilities": {
+        "accident": 0.027372678741812706,
+        "gunshot": 0.0003735639911610633,
+        "normal": 0.6865414977073669,
+        "scream": 0.28571227192878723
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "2-70344-A-33.wav",
+      "category": "door_wood_creaks",
+      "prediction": "normal",
+      "confidence": 0.9726179242134094,
+      "probabilities": {
+        "accident": 0.0016767603810876608,
+        "gunshot": 0.00030961979064159095,
+        "normal": 0.9726179242134094,
+        "scream": 0.025395682081580162
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "3-93010-A-18.wav",
+      "category": "toilet_flush",
+      "prediction": "normal",
+      "confidence": 0.8918044567108154,
+      "probabilities": {
+        "accident": 0.03807739168405533,
+        "gunshot": 0.0024002555292099714,
+        "normal": 0.8918044567108154,
+        "scream": 0.06771790236234665
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "5-244933-A-34.wav",
+      "category": "can_opening",
+      "prediction": "normal",
+      "confidence": 0.999968409538269,
+      "probabilities": {
+        "accident": 9.354281793605423e-09,
+        "gunshot": 9.819418664847035e-07,
+        "normal": 0.999968409538269,
+        "scream": 3.061982715735212e-05
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "4-188703-B-8.wav",
+      "category": "sheep",
+      "prediction": "normal",
+      "confidence": 0.9911041259765625,
+      "probabilities": {
+        "accident": 0.0023424713872373104,
+        "gunshot": 0.0008147683111019433,
+        "normal": 0.9911041259765625,
+        "scream": 0.005738565698266029
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "4-156844-A-21.wav",
+      "category": "sneezing",
+      "prediction": "normal",
+      "confidence": 0.9995724558830261,
+      "probabilities": {
+        "accident": 3.932106665160973e-06,
+        "gunshot": 3.226654007448815e-05,
+        "normal": 0.9995724558830261,
+        "scream": 0.0003912735846824944
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "1-68628-A-27.wav",
+      "category": "brushing_teeth",
+      "prediction": "normal",
+      "confidence": 0.7084718942642212,
+      "probabilities": {
+        "accident": 0.27905458211898804,
+        "gunshot": 0.00036764272954314947,
+        "normal": 0.7084718942642212,
+        "scream": 0.012105876579880714
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "4-172500-D-27.wav",
+      "category": "brushing_teeth",
+      "prediction": "normal",
+      "confidence": 0.6927538514137268,
+      "probabilities": {
+        "accident": 0.29032862186431885,
+        "gunshot": 0.0006586899398826063,
+        "normal": 0.6927538514137268,
+        "scream": 0.016258839517831802
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "1-69422-A-3.wav",
+      "category": "cow",
+      "prediction": "normal",
+      "confidence": 0.9972400665283203,
+      "probabilities": {
+        "accident": 0.001128353294916451,
+        "gunshot": 0.0002327953843632713,
+        "normal": 0.9972400665283203,
+        "scream": 0.0013987765414640307
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "3-96606-A-49.wav",
+      "category": "hand_saw",
+      "prediction": "normal",
+      "confidence": 0.9999934434890747,
+      "probabilities": {
+        "accident": 8.970854614709367e-10,
+        "gunshot": 3.054930308721282e-09,
+        "normal": 0.9999934434890747,
+        "scream": 6.560865131177707e-06
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "5-216368-A-28.wav",
+      "category": "snoring",
+      "prediction": "normal",
+      "confidence": 0.8948062062263489,
+      "probabilities": {
+        "accident": 0.08340831100940704,
+        "gunshot": 0.002004282083362341,
+        "normal": 0.8948062062263489,
+        "scream": 0.01978117786347866
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "1-46353-A-49.wav",
+      "category": "hand_saw",
+      "prediction": "normal",
+      "confidence": 0.9999992847442627,
+      "probabilities": {
+        "accident": 6.810250141597862e-09,
+        "gunshot": 2.9537611467844727e-08,
+        "normal": 0.9999992847442627,
+        "scream": 6.652079491686891e-07
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "1-81269-A-3.wav",
+      "category": "cow",
+      "prediction": "normal",
+      "confidence": 0.9757146239280701,
+      "probabilities": {
+        "accident": 0.019166462123394012,
+        "gunshot": 0.0004280327702872455,
+        "normal": 0.9757146239280701,
+        "scream": 0.004690782632678747
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "2-56926-A-46.wav",
+      "category": "church_bells",
+      "prediction": "normal",
+      "confidence": 0.9982250332832336,
+      "probabilities": {
+        "accident": 0.0004247538454364985,
+        "gunshot": 0.00034037031582556665,
+        "normal": 0.9982250332832336,
+        "scream": 0.0010098009370267391
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "4-198360-C-49.wav",
+      "category": "hand_saw",
+      "prediction": "normal",
+      "confidence": 0.7878511548042297,
+      "probabilities": {
+        "accident": 0.009046554565429688,
+        "gunshot": 0.19787023961544037,
+        "normal": 0.7878511548042297,
+        "scream": 0.005232015624642372
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "4-187284-A-30.wav",
+      "category": "door_wood_knock",
+      "prediction": "normal",
+      "confidence": 0.9999548196792603,
+      "probabilities": {
+        "accident": 1.84279906534357e-06,
+        "gunshot": 1.9179804439772852e-05,
+        "normal": 0.9999548196792603,
+        "scream": 2.425356797175482e-05
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "1-27724-A-1.wav",
+      "category": "rooster",
+      "prediction": "scream",
+      "confidence": 0.8746213316917419,
+      "probabilities": {
+        "accident": 0.022395359352231026,
+        "gunshot": 9.734092600410804e-05,
+        "normal": 0.1028859093785286,
+        "scream": 0.8746213316917419
+      },
+      "is_false_positive": true
+    },
+    {
+      "file": "2-70280-A-18.wav",
+      "category": "toilet_flush",
+      "prediction": "normal",
+      "confidence": 0.9507166147232056,
+      "probabilities": {
+        "accident": 0.007970047183334827,
+        "gunshot": 0.002768242033198476,
+        "normal": 0.9507166147232056,
+        "scream": 0.038545090705156326
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "3-208820-A-49.wav",
+      "category": "hand_saw",
+      "prediction": "accident",
+      "confidence": 0.8384218215942383,
+      "probabilities": {
+        "accident": 0.8384218215942383,
+        "gunshot": 0.0011645267950370908,
+        "normal": 0.10347764939069748,
+        "scream": 0.05693604052066803
+      },
+      "is_false_positive": true
+    },
+    {
+      "file": "3-151213-A-24.wav",
+      "category": "coughing",
+      "prediction": "normal",
+      "confidence": 0.9991515874862671,
+      "probabilities": {
+        "accident": 3.4305160170333693e-06,
+        "gunshot": 5.096806944493437e-06,
+        "normal": 0.9991515874862671,
+        "scream": 0.0008397906785830855
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "1-51170-A-18.wav",
+      "category": "toilet_flush",
+      "prediction": "accident",
+      "confidence": 0.7478638887405396,
+      "probabilities": {
+        "accident": 0.7478638887405396,
+        "gunshot": 0.0348379872739315,
+        "normal": 0.1343967318534851,
+        "scream": 0.08290146291255951
+      },
+      "is_false_positive": true
+    },
+    {
+      "file": "3-197408-A-8.wav",
+      "category": "sheep",
+      "prediction": "normal",
+      "confidence": 0.7199121713638306,
+      "probabilities": {
+        "accident": 0.02965071052312851,
+        "gunshot": 0.0006587583920918405,
+        "normal": 0.7199121713638306,
+        "scream": 0.24977841973304749
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "2-81270-A-1.wav",
+      "category": "rooster",
+      "prediction": "normal",
+      "confidence": 0.8738272786140442,
+      "probabilities": {
+        "accident": 0.005418404936790466,
+        "gunshot": 8.124949090415612e-05,
+        "normal": 0.8738272786140442,
+        "scream": 0.12067306041717529
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "5-238938-A-27.wav",
+      "category": "brushing_teeth",
+      "prediction": "normal",
+      "confidence": 0.43456971645355225,
+      "probabilities": {
+        "accident": 0.3354537785053253,
+        "gunshot": 0.12705938518047333,
+        "normal": 0.43456971645355225,
+        "scream": 0.10291706770658493
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "3-155568-A-32.wav",
+      "category": "keyboard_typing",
+      "prediction": "normal",
+      "confidence": 0.9999828338623047,
+      "probabilities": {
+        "accident": 6.957521918593557e-07,
+        "gunshot": 5.706694082618924e-06,
+        "normal": 0.9999828338623047,
+        "scream": 1.0683237633202225e-05
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "4-202298-A-31.wav",
+      "category": "mouse_click",
+      "prediction": "normal",
+      "confidence": 0.9989870190620422,
+      "probabilities": {
+        "accident": 0.0002983556187245995,
+        "gunshot": 0.00011493225611047819,
+        "normal": 0.9989870190620422,
+        "scream": 0.0005997440894134343
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "1-53670-A-18.wav",
+      "category": "toilet_flush",
+      "prediction": "normal",
+      "confidence": 0.6610147356987,
+      "probabilities": {
+        "accident": 0.2866470217704773,
+        "gunshot": 0.008040513843297958,
+        "normal": 0.6610147356987,
+        "scream": 0.04429781436920166
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "1-94231-A-32.wav",
+      "category": "keyboard_typing",
+      "prediction": "normal",
+      "confidence": 0.8652588129043579,
+      "probabilities": {
+        "accident": 0.012657441198825836,
+        "gunshot": 0.10121752321720123,
+        "normal": 0.8652588129043579,
+        "scream": 0.020866233855485916
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "3-116135-A-1.wav",
+      "category": "rooster",
+      "prediction": "normal",
+      "confidence": 0.9941064119338989,
+      "probabilities": {
+        "accident": 0.002595537807792425,
+        "gunshot": 0.0002157545241061598,
+        "normal": 0.9941064119338989,
+        "scream": 0.0030822716653347015
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "4-174860-B-3.wav",
+      "category": "cow",
+      "prediction": "normal",
+      "confidence": 0.9486992955207825,
+      "probabilities": {
+        "accident": 0.0054725781083106995,
+        "gunshot": 0.0001633732026675716,
+        "normal": 0.9486992955207825,
+        "scream": 0.04566480964422226
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "2-139748-B-15.wav",
+      "category": "water_drops",
+      "prediction": "normal",
+      "confidence": 0.9989186525344849,
+      "probabilities": {
+        "accident": 0.0003160395135637373,
+        "gunshot": 7.262353756232187e-05,
+        "normal": 0.9989186525344849,
+        "scream": 0.0006927275680936873
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "3-120526-A-37.wav",
+      "category": "clock_alarm",
+      "prediction": "normal",
+      "confidence": 0.9965962767601013,
+      "probabilities": {
+        "accident": 0.00043305111466906965,
+        "gunshot": 0.00015352299669757485,
+        "normal": 0.9965962767601013,
+        "scream": 0.002817221451550722
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "5-213802-A-12.wav",
+      "category": "crackling_fire",
+      "prediction": "normal",
+      "confidence": 0.9427340626716614,
+      "probabilities": {
+        "accident": 0.03898763284087181,
+        "gunshot": 0.002494444604963064,
+        "normal": 0.9427340626716614,
+        "scream": 0.015783850103616714
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "3-151089-A-30.wav",
+      "category": "door_wood_knock",
+      "prediction": "normal",
+      "confidence": 0.9976110458374023,
+      "probabilities": {
+        "accident": 4.442168210516684e-05,
+        "gunshot": 3.524452040437609e-05,
+        "normal": 0.9976110458374023,
+        "scream": 0.002309295814484358
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "5-156698-A-18.wav",
+      "category": "toilet_flush",
+      "prediction": "normal",
+      "confidence": 0.8896581530570984,
+      "probabilities": {
+        "accident": 0.03900502994656563,
+        "gunshot": 0.0025084554217755795,
+        "normal": 0.8896581530570984,
+        "scream": 0.06882838904857635
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "3-145387-A-29.wav",
+      "category": "drinking_sipping",
+      "prediction": "normal",
+      "confidence": 0.9732330441474915,
+      "probabilities": {
+        "accident": 0.009149480611085892,
+        "gunshot": 0.0003635654866229743,
+        "normal": 0.9732330441474915,
+        "scream": 0.017253952100872993
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "5-249937-A-22.wav",
+      "category": "clapping",
+      "prediction": "gunshot",
+      "confidence": 0.9997615218162537,
+      "probabilities": {
+        "accident": 0.00023847758711781353,
+        "gunshot": 0.9997615218162537,
+        "normal": 4.908014972215824e-08,
+        "scream": 1.1382253646552432e-12
+      },
+      "is_false_positive": true
+    },
+    {
+      "file": "2-76408-C-22.wav",
+      "category": "clapping",
+      "prediction": "normal",
+      "confidence": 1.0,
+      "probabilities": {
+        "accident": 5.357892948754106e-13,
+        "gunshot": 9.552512114652245e-10,
+        "normal": 1.0,
+        "scream": 8.467290868452437e-09
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "4-167642-A-21.wav",
+      "category": "sneezing",
+      "prediction": "scream",
+      "confidence": 0.6651652455329895,
+      "probabilities": {
+        "accident": 0.001452103490009904,
+        "gunshot": 1.0992199349857401e-05,
+        "normal": 0.3333716094493866,
+        "scream": 0.6651652455329895
+      },
+      "is_false_positive": true
+    },
+    {
+      "file": "3-187549-B-6.wav",
+      "category": "hen",
+      "prediction": "normal",
+      "confidence": 0.929990291595459,
+      "probabilities": {
+        "accident": 8.899062231648713e-05,
+        "gunshot": 4.122374775761273e-06,
+        "normal": 0.929990291595459,
+        "scream": 0.06991665065288544
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "5-241846-A-15.wav",
+      "category": "water_drops",
+      "prediction": "normal",
+      "confidence": 0.9952723383903503,
+      "probabilities": {
+        "accident": 2.6986915599991335e-06,
+        "gunshot": 1.3143244359525852e-06,
+        "normal": 0.9952723383903503,
+        "scream": 0.004723647143691778
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "2-81112-A-34.wav",
+      "category": "can_opening",
+      "prediction": "normal",
+      "confidence": 0.9970519542694092,
+      "probabilities": {
+        "accident": 0.000997441355139017,
+        "gunshot": 0.0008831043960526586,
+        "normal": 0.9970519542694092,
+        "scream": 0.001067443168722093
+      },
+      "is_false_positive": false
+    },
+    {
+      "file": "3-233151-A-2.wav",
+      "category": "pig",
+      "prediction": "scream",
+      "confidence": 0.9094087481498718,
+      "probabilities": {
+        "accident": 9.390067862113938e-05,
+        "gunshot": 2.245251806698434e-07,
+        "normal": 0.09049715101718903,
+        "scream": 0.9094087481498718
+      },
+      "is_false_positive": true
+    },
+    {
+      "file": "2-84965-A-23.wav",
+      "category": "breathing",
+      "prediction": "scream",
+      "confidence": 0.5789932608604431,
+      "probabilities": {
+        "accident": 0.03325473144650459,
+        "gunshot": 0.0018702816450968385,
+        "normal": 0.3858817517757416,
+        "scream": 0.5789932608604431
+      },
+      "is_false_positive": true
+    },
+    {
+      "file": "3-100024-A-27.wav",
+      "category": "brushing_teeth",
+      "prediction": "gunshot",
+      "confidence": 0.6222766637802124,
+      "probabilities": {
+        "accident": 0.0028465401846915483,
+        "gunshot": 0.6222766637802124,
+        "normal": 0.37462836503982544,
+        "scream": 0.00024841533740982413
+      },
+      "is_false_positive": true
+    },
+    {
+      "file": "1-51805-E-33.wav",
+      "category": "door_wood_creaks",
+      "prediction": "normal",
+      "confidence": 0.9769647121429443,
+      "probabilities": {
+        "accident": 0.0003268680302426219,
+        "gunshot": 7.372356776613742e-05,
+        "normal": 0.9769647121429443,
+        "scream": 0.022634586319327354
+      },
+      "is_false_positive": false
+    }
+  ]
+}
