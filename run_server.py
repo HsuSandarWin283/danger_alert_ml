@@ -72,25 +72,6 @@ _model_loaded = False
 _predict_count = 0
 PREDICT_INITIAL_IGNORE_COUNT = 5
 
-_recent_predictions = []
-RECENT_PREDICTIONS_MAX = 3
-_last_result_cache = None
-
-
-def _should_skip_prediction(filename: str, prediction: str, confidence: float, result: dict | None = None) -> dict | None:
-    global _recent_predictions, _last_result_cache
-    current = (filename, prediction, round(confidence, 2))
-    _recent_predictions.append(current)
-    if result is not None:
-        _last_result_cache = result
-    if len(_recent_predictions) > RECENT_PREDICTIONS_MAX:
-        _recent_predictions.pop(0)
-    if len(_recent_predictions) == RECENT_PREDICTIONS_MAX:
-        if all(p == _recent_predictions[0] for p in _recent_predictions):
-            logger.info("[predict] skipped duplicate result filename=%s prediction=%s confidence=%.4f", filename, prediction, confidence)
-            return _last_result_cache
-    return None
-
 
 @app.on_event("startup")
 async def startup_load_model():
@@ -181,18 +162,7 @@ async def predict_sound(file: UploadFile = File(...)):
             result.get("reason", "none"),
         )
 
-        skip_key = _should_skip_prediction(
-            file.filename or "unknown.wav",
-            result["prediction"],
-            result["confidence"],
-            result,
-        )
-        if skip_key is not None:
-            result["ignored_duplicate"] = True
-        else:
-            result["ignored_duplicate"] = False
-
-        if result.get("is_danger") and not result.get("ignored_duplicate"):
+        if result.get("is_danger"):
             _save_debug_audio(tmp_path, file.filename or "unknown.wav")
             logger.info(
                 "[debug-audio] saved danger detection filename=%s prediction=%s confidence=%.4f reason=%s",
@@ -200,13 +170,6 @@ async def predict_sound(file: UploadFile = File(...)):
                 result.get("prediction"),
                 result.get("confidence", 0),
                 result.get("reason", "unknown"),
-            )
-        elif result.get("ignored_duplicate"):
-            logger.info(
-                "[debug-audio] skipped duplicate filename=%s prediction=%s confidence=%.4f",
-                file.filename,
-                result.get("prediction"),
-                result.get("confidence", 0),
             )
         else:
             logger.info(

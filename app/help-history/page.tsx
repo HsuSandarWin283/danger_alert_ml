@@ -14,6 +14,18 @@ export default function HelpHistoryPage() {
   const [items, setItems] = useState<HelpMessage[]>([])
   const [loading, setLoading] = useState(true)
 
+  const formatDangerType = (type: string | null | undefined): string | null => {
+    if (!type) return null
+    const lower = type.toLowerCase()
+    if (lower === 'gunshot' || lower === 'accident') {
+      return t('dangerousSound')
+    }
+    if (lower === 'scream') {
+      return t('screamSound')
+    }
+    return type.toUpperCase()
+  }
+
   useEffect(() => {
     if (!authLoading && !user) {
       router.replace('/login')
@@ -83,7 +95,7 @@ export default function HelpHistoryPage() {
                   <div className="flex justify-between items-start mb-2">
                     <div>
                       <h3 className="text-xl font-bold text-gray-900">
-                        {item.dangerType ? `${t('danger')}: ${item.dangerType.toUpperCase()}` : t('helpRequest')}
+                        {item.dangerType ? `${t('danger')}: ${formatDangerType(item.dangerType)}` : t('helpRequest')}
                       </h3>
                       <p className="text-sm text-gray-500">
                         {item.createdAt ? new Date(item.createdAt).toLocaleString() : ''}

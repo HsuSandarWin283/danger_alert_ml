@@ -126,7 +126,7 @@ public class HelpAlertActivity extends AppCompatActivity {
 
         TextView titleView = new TextView(this);
         String type = dangerType != null && !dangerType.isEmpty() ? dangerType : "unknown";
-        titleView.setText(ns.dangerTypeTitle(type));
+        titleView.setText(ns.displayDangerType(type));
         titleView.setTextColor(Color.WHITE);
         titleView.setTextSize(28);
         titleView.setGravity(Gravity.CENTER);

@@ -71,6 +71,18 @@ export default function DangerAlert({ detectedAnswer, confidence }) {
   const { t } = useLang()
   const { user } = useAuth()
 
+  const formatDangerType = (value) => {
+    if (!value) return ''
+    const lower = value.toLowerCase()
+    if (lower === 'gunshot' || lower === 'accident') {
+      return t('dangerousSound')
+    }
+    if (lower === 'scream') {
+      return t('screamSound')
+    }
+    return value
+  }
+
   useEffect(() => {
     const handleDangerDetected = (event) => {
       if (Capacitor.isNativePlatform()) return
@@ -314,7 +326,7 @@ export default function DangerAlert({ detectedAnswer, confidence }) {
             <div className="text-center mb-8">
               <div className="text-6xl mb-4">⚠️</div>
               <h2 className="text-3xl font-bold text-gray-900 mb-2">
-                Danger : {displayAnswer}
+                Danger : {formatDangerType(displayAnswer)}
               </h2>
               <p className="text-xl font-semibold text-gray-800 mb-6">
                 {t('dangerSoundFoundNear')}

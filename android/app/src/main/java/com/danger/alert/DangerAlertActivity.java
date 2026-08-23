@@ -197,7 +197,7 @@ public class DangerAlertActivity extends AppCompatActivity {
         NotificationStrings ns = new NotificationStrings(this);
 
         TextView title = new TextView(this);
-        title.setText(ns.dangerTypeTitle(dangerType));
+        title.setText(ns.displayDangerType(dangerType));
         title.setTextColor(Color.WHITE);
         title.setTextSize(28);
         title.setGravity(Gravity.CENTER);

@@ -56,10 +56,12 @@ public class NotificationStrings {
     }
 
     public String dangerDetectedTitle(String type) {
+        String display = displayDangerType(type);
+        boolean mapped = !display.equals(dangerTypeTitle(type));
         if (isMy()) {
-            return "အန္တရာယ်: " + type.toUpperCase() + " ရှာဖွေတွေ့ရှိပါပြီ!";
+            return display + (mapped ? " ရှာဖွေတွေ့ရှိပါပြီ!" : " ရှာဖွေတွေ့ရှိပါပြီ!");
         }
-        return "DANGER: " + type.toUpperCase() + " detected!";
+        return display + (mapped ? " detected!" : " detected!");
     }
 
     public String areYouOk() {
@@ -71,10 +73,12 @@ public class NotificationStrings {
     }
 
     public String dangerFoundMessage(String type) {
+        String display = displayDangerType(type);
+        boolean mapped = !display.equals(dangerTypeTitle(type));
         if (isMy()) {
-            return "သင့်အနီးတွင် " + type.toUpperCase() + " အသံ ရှာဖွေတွေ့ရှိပါသည်။\nသင် ဘေးကင်းပါသလား?";
+            return "သင့်အနီးတွင် " + display + (mapped ? " ရှာဖွေတွေ့ရှိပါသည်။\nသင် ဘေးကင်းပါသလား?" : " အသံ ရှာဖွေတွေ့ရှိပါသည်။\nသင် ဘေးကင်းပါသလား?");
         }
-        return "I found " + type.toUpperCase() + " sound near you.\nAre you OK?";
+        return "I found " + display + (mapped ? " near you.\nAre you OK?" : " sound near you.\nAre you OK?");
     }
 
     public String dangerTypeTitle(String type) {
@@ -82,6 +86,17 @@ public class NotificationStrings {
             return "အန္တရာယ်: " + type.toUpperCase();
         }
         return "Danger : " + type.toUpperCase();
+    }
+
+    public String displayDangerType(String type) {
+        if (type == null) return "";
+        String lower = type.toLowerCase();
+        if ("gunshot".equals(lower) || "accident".equals(lower)) {
+            return isMy() ? "အန္တရာယ်ရှိသောအသံ" : "Dangerous Sound";
+        } else if ("scream".equals(lower)) {
+            return isMy() ? "အော်သံ" : "Scream";
+        }
+        return dangerTypeTitle(type);
     }
 
     public String dangerSoundFoundNear() {
@@ -142,7 +157,7 @@ public class NotificationStrings {
     }
 
     public String pushTitle(String dangerType) {
-        return "DANGER: " + dangerType.toUpperCase();
+        return displayDangerType(dangerType);
     }
 
     public String needsHelp() {

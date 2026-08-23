@@ -111,6 +111,8 @@ export const translations: Record<Lang, Record<string, string>> = {
     loadingHelpHistory: 'Loading help history...',
     danger: 'Danger',
     members: 'member(s)',
+    dangerousSound: 'Dangerous Sound',
+    screamSound: 'Scream',
 
     // Trusted Group
     trustedGroupTitle: 'Trusted Group Management',
@@ -250,6 +252,8 @@ export const translations: Record<Lang, Record<string, string>> = {
     loadingHelpHistory: 'အကူအညီမှတ်တမ်းဖွင့်နေသည်...',
     danger: 'အန္တရာယ်',
     members: 'အဖွဲ့ဝင်',
+    dangerousSound: 'အန္တရာယ်ရှိသောအသံ',
+    screamSound: 'အော်သံ',
 
     // Trusted Group
     trustedGroupTitle: 'ယုံကြည်ရသူများအုပ်စု စီမံခြင်း',

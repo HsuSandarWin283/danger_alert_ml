@@ -12,6 +12,18 @@ export default function AudioVisualizer() {
   const analyserRef = useRef(null)
   const streamRef = useRef(null)
 
+  const formatDangerType = (value) => {
+    if (!value) return ''
+    const lower = value.toLowerCase()
+    if (lower === 'gunshot' || lower === 'accident') {
+      return t('dangerousSound')
+    }
+    if (lower === 'scream') {
+      return t('screamSound')
+    }
+    return value
+  }
+
   useEffect(() => {
     let animationId
     let cancelled = false
@@ -113,7 +125,7 @@ export default function AudioVisualizer() {
           <div className="bg-gray-50 rounded-xl p-4">
             <p className="text-sm text-gray-500">{t('lastPrediction')}</p>
             <p className="text-xl font-bold">
-              {lastPrediction ? lastPrediction.prediction : t('waitingForDetection')}
+              {lastPrediction ? formatDangerType(lastPrediction.prediction) : t('waitingForDetection')}
             </p>
           </div>
         </div>
