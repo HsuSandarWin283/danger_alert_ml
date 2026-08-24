@@ -242,6 +242,8 @@ async def debug_predict(file: UploadFile = File(...)):
 
 @app.get("/health")
 async def health_check():
+    global _predict_count
+    _predict_count = 0
     if not _model_loaded:
         return JSONResponse(
             status_code=503,

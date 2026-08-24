@@ -415,6 +415,11 @@ public class MonitoringService extends Service {
         pendingApiCalls.incrementAndGet();
         apiExecutor.execute(() -> {
             try {
+                if (!isRecording.get()) {
+                    Log.i(TAG_API, "Skipping predict because monitoring stopped");
+                    return;
+                }
+
                 byte[] wavData = createWav(chunkCopy, chunkCopy.length, SAMPLE_RATE);
                 Log.i(TAG_AUDIO, "WAV created: samples=" + chunkCopy.length
                         + " duration=" + (chunkCopy.length / (float) SAMPLE_RATE)
@@ -634,22 +639,38 @@ public class MonitoringService extends Service {
         getSharedPreferences("capacitor", MODE_PRIVATE)
                 .edit().putBoolean("monitoring_running", false).apply();
         BackgroundMonitorPlugin.notifyStateChange(false);
+
         if (audioRecord != null) {
             try {
                 audioRecord.stop();
-                audioRecord.release();
             } catch (Exception e) {
                 Log.e(TAG, "Error stopping AudioRecord", e);
             }
-            circularBuffer = null;
+            try {
+                audioRecord.release();
+            } catch (Exception e) {
+                Log.e(TAG, "Error releasing AudioRecord", e);
+            }
+            audioRecord = null;
+        }
+
+        if (executor != null) {
+            executor.shutdownNow();
+            executor = Executors.newSingleThreadExecutor();
+        }
+
+        if (apiExecutor != null) {
+            apiExecutor.shutdownNow();
+            apiExecutor = Executors.newFixedThreadPool(2);
+        }
+
+        circularBuffer = null;
         circularBufferIndex = 0;
         lastAnalysisTime = 0;
         isDangerState = false;
         lastDangerTime = 0;
         lastAlertLabel = null;
         lastAlertTime = 0;
-        audioRecord = null;
-        }
         Log.i(TAG_MONITOR, "Monitoring stopped");
     }
 
