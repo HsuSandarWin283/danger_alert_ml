@@ -55,7 +55,8 @@ public class MonitoringService extends Service {
     private static final int ALERT_NOTIFICATION_ID = 2001;
     private static final int SAMPLE_RATE = 22050;
     private static final int DURATION_SECONDS = 3;
-    private static final String DEFAULT_API_URL = "http://192.168.99.112:8000";
+    private static final String DEFAULT_API_URL = "https://192.168.99.112:8000";
+    private static final String HEALTH_PATH = "/ping";
     private static final long KEEPALIVE_INTERVAL_MS = 15 * 1000;
     private static final double RMS_THRESHOLD = 0.004;
     private static final double CONFIDENCE_THRESHOLD = 0.88;
@@ -288,7 +289,7 @@ public class MonitoringService extends Service {
                 if (!isRecording.get()) return;
                 apiExecutor.execute(() -> {
                     try {
-                        HttpURLConnection c = (HttpURLConnection) new URL(apiUrl + "/health").openConnection();
+                        HttpURLConnection c = (HttpURLConnection) new URL(apiUrl + HEALTH_PATH).openConnection();
                         c.setRequestMethod("GET");
                         c.setConnectTimeout(5000);
                         c.setReadTimeout(5000);

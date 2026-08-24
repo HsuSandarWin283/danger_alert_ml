@@ -228,8 +228,10 @@ export function useDangerSoundMonitor(
     startTimeRef.current = 0;
 
     if (Capacitor.isNativePlatform()) {
- BackgroundMonitor.stopMonitoring().catch(() => {});
+      BackgroundMonitor.stopMonitoring().catch(() => {});
     }
+
+    window.location.reload();
   }, []);
 
   useEffect(() => {
@@ -387,8 +389,8 @@ export function useDangerSoundMonitor(
     try {
       const stream = await window.navigator.mediaDevices.getUserMedia({
         audio: {
-          echoCancellation: false,
-          noiseSuppression: true,
+          echoCancellation: true,
+          noiseSuppression: false,
           autoGainControl: false,
         },
       });

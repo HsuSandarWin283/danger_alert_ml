@@ -71,6 +71,7 @@ _model_loaded = False
 
 _predict_count = 0
 PREDICT_INITIAL_IGNORE_COUNT = 5
+_health_called = False
 
 
 @app.on_event("startup")
@@ -250,6 +251,16 @@ async def health_check():
             content={"status": "degraded", "model_loaded": False, "detail": "Model not loaded yet"},
         )
     return {"status": "healthy", "model_loaded": True}
+
+
+@app.get("/ping")
+async def ping():
+    if not _model_loaded:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "degraded", "model_loaded": False},
+        )
+    return {"status": "ok", "model_loaded": True}
 
 
 @app.post("/emergency-alert")
