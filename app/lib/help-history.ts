@@ -9,7 +9,7 @@ import {
   orderBy,
   onSnapshot,
 } from 'firebase/firestore'
-import { User } from './trusted-group-types'
+import type { User } from './trusted-group-types'
 
 export interface HelpMessage {
   id?: string

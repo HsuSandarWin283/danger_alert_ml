@@ -11,7 +11,7 @@ import {
   serverTimestamp,
   onSnapshot,
 } from 'firebase/firestore'
-import { User, GroupMember, SearchResult } from './trusted-group-types'
+import type { User, GroupMember, SearchResult } from './trusted-group-types'
 
 const USERS_COLLECTION = 'users'
 const GROUP_MEMBERS_COLLECTION = 'group_members'

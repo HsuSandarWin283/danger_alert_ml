@@ -113,6 +113,10 @@ export const translations: Record<Lang, Record<string, string>> = {
     members: 'member(s)',
     dangerousSound: 'Dangerous Sound',
     screamSound: 'Scream',
+    trouble:'TROUBLE',
+    deletedUser:'Account deleted',
+    deleteAcc: 'Delete Account',
+    deleting:'Deleting...',
 
     // Trusted Group
     trustedGroupTitle: 'Trusted Group Management',
@@ -137,6 +141,8 @@ export const translations: Record<Lang, Record<string, string>> = {
     // Settings
     settings: 'Settings',
     language: 'Language',
+    deleteAcc: 'Delete Account',
+    deleting: 'Deleting...',
 
     // Mic Monitor page
     micMonitorPageTitle: 'Microphone Monitor | AI Safety Companion',
@@ -254,6 +260,10 @@ export const translations: Record<Lang, Record<string, string>> = {
     members: 'အဖွဲ့ဝင်',
     dangerousSound: 'အန္တရာယ်ရှိသောအသံ',
     screamSound: 'အော်သံ',
+    trouble:'ဒုက္ခရောက်နေသည်',
+    deletedUser:'အကောင့်ဖျက်ထားသည်',
+    deleteAcc: 'အကောင့်ဖျက်မည်',
+    deleting:'အကောင့်ဖျက်နေသည်...',
 
     // Trusted Group
     trustedGroupTitle: 'ယုံကြည်ရသူများအုပ်စု စီမံခြင်း',
@@ -278,6 +288,8 @@ export const translations: Record<Lang, Record<string, string>> = {
     // Settings
     settings: 'ဆက်တင်',
     language: 'ဘာသာစကား',
+    deleteAcc: 'အကောင့်ဖျက်ရန်',
+    deleting: 'ဖျက်နေသည်...',
 
     // Mic Monitor page
     micMonitorPageTitle: 'မိုက်ခရိုဖုန်း စောင့်ကြည့်ရေး | AI ကိုယ်ရေးလုံခြုံရေး Companion',

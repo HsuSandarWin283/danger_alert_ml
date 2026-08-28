@@ -132,8 +132,10 @@ public class DangerAlertActivity extends AppCompatActivity {
         icon.setGravity(Gravity.CENTER);
         rootLayout.addView(icon);
 
+        NotificationStrings ns = new NotificationStrings(this);
+
         TextView titleView = new TextView(this);
-        titleView.setText("Danger : TROUBLE");
+        titleView.setText(ns.dangerTypeTitle("trouble"));
         titleView.setTextColor(Color.WHITE);
         titleView.setTextSize(28);
         titleView.setGravity(Gravity.CENTER);
@@ -158,7 +160,6 @@ public class DangerAlertActivity extends AppCompatActivity {
         rootLayout.addView(msgView);
 
         Button closeBtn = new Button(this);
-        NotificationStrings ns = new NotificationStrings(this);
         closeBtn.setText(ns.close());
         closeBtn.setTextSize(20);
         closeBtn.setBackgroundColor(Color.WHITE);

@@ -1,6 +1,6 @@
 import { db } from './firebase'
 import { doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore'
-import { User } from './trusted-group-types'
+import type { User } from './trusted-group-types'
 
 const USERS_COLLECTION = 'users'
 
@@ -31,3 +31,5 @@ export function subscribeToUser(uid: string, callback: (user: User | null) => vo
     }
   })
 }
+
+export { User }

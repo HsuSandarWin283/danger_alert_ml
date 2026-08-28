@@ -215,7 +215,7 @@ export default function DangerAlert({ detectedAnswer, confidence }) {
 
       if (isNative) {
         const result = await BackgroundMonitor.sendEmergencyAlert({
-          dangerType: 'TROUBLE',
+          dangerType: t('trouble'),
           confidence: 1,
           alertMsg: `${displayName} ${t('needsHelp')}`,
         })
@@ -250,7 +250,7 @@ export default function DangerAlert({ detectedAnswer, confidence }) {
           senderName: displayName,
           senderPhone: user.phone || '',
           receiverIds,
-          dangerType: 'TROUBLE',
+          dangerType: t('trouble'),
           alertMsg: `${displayName} ${t('needsHelp')}`,
         })
 

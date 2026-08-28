@@ -93,7 +93,7 @@ public class HelpAlertActivity extends AppCompatActivity {
             String alertMsg = getIntent().getStringExtra("alertMsg");
             String locationName = getIntent().getStringExtra("locationName");
             String senderPhone = getIntent().getStringExtra("senderPhone");
-            if (dangerType != null && "TROUBLE".equalsIgnoreCase(dangerType)) {
+            if (dangerType != null && "trouble".equalsIgnoreCase(dangerType)) {
                 buildReceivedManualUI(senderName, alertMsg, locationName, senderPhone);
             } else {
                 buildReceivedDangerUI(dangerType, alertMsg, locationName, senderPhone);
@@ -277,7 +277,7 @@ public class HelpAlertActivity extends AppCompatActivity {
         NotificationStrings ns = new NotificationStrings(this);
 
         TextView titleView = new TextView(this);
-        titleView.setText("Danger : TROUBLE");
+        titleView.setText(ns.dangerTypeTitle("trouble"));
         titleView.setTextColor(Color.WHITE);
         titleView.setTextSize(28);
         titleView.setGravity(Gravity.CENTER);
