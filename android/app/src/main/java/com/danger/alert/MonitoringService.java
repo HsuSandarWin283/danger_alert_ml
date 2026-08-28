@@ -1,5 +1,5 @@
 package com.danger.alert;
-
+import android.content.Context;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -11,6 +11,7 @@ import android.content.pm.ServiceInfo;
 import android.graphics.Color;
 import android.media.AudioFormat;
 import android.media.AudioRecord;
+import android.media.audiofx.AcousticEchoCanceler;
 import android.media.MediaRecorder;
 import android.os.Build;
 import android.os.Handler;
@@ -55,6 +56,7 @@ public class MonitoringService extends Service {
     private static final int ALERT_NOTIFICATION_ID = 2001;
     private static final int SAMPLE_RATE = 22050;
     private static final int DURATION_SECONDS = 3;
+    private static final int AUDIO_SOURCE = MediaRecorder.AudioSource.VOICE_RECOGNITION;
     private static final String DEFAULT_API_URL = "https://192.168.99.112:8000";
     private static final String HEALTH_PATH = "/ping";
     private static final long KEEPALIVE_INTERVAL_MS = 15 * 1000;
@@ -247,7 +249,7 @@ public class MonitoringService extends Service {
 
         try {
             audioRecord = new AudioRecord(
-                    MediaRecorder.AudioSource.MIC,
+                    AUDIO_SOURCE,
                     SAMPLE_RATE,
                     AudioFormat.CHANNEL_IN_MONO,
                     AudioFormat.ENCODING_PCM_16BIT,
@@ -261,12 +263,35 @@ public class MonitoringService extends Service {
         }
 
         if (audioRecord.getState() != AudioRecord.STATE_INITIALIZED) {
-            Log.e(TAG_AUDIO, "AudioRecord failed to initialize");
-            NotificationStrings ns = new NotificationStrings(this);
-            updateNotification(ns.audioUnavailable());
-            return;
+            Log.e(TAG_AUDIO, "AudioRecord failed to initialize with VOICE_RECOGNITION, falling back to MIC");
+            try {
+                audioRecord = new AudioRecord(
+                        MediaRecorder.AudioSource.MIC,
+                        SAMPLE_RATE,
+                        AudioFormat.CHANNEL_IN_MONO,
+                        AudioFormat.ENCODING_PCM_16BIT,
+                        bufferSize
+                );
+            } catch (Exception ex) {
+                Log.e(TAG, "Fallback AudioRecord init failed", ex);
+                NotificationStrings ns = new NotificationStrings(this);
+                updateNotification(ns.audioUnavailable());
+                return;
+            }
         }
         Log.i(TAG_AUDIO, "AudioRecord initialized successfully");
+
+        if (AcousticEchoCanceler.isAvailable()) {
+            try {
+                AcousticEchoCanceler echoCanceler = AcousticEchoCanceler.create(audioRecord.getAudioSessionId());
+                echoCanceler.setEnabled(true);
+                Log.i(TAG_AUDIO, "AcousticEchoCanceler enabled");
+            } catch (Exception e) {
+                Log.w(TAG_AUDIO, "Failed to enable AcousticEchoCanceler", e);
+            }
+        } else {
+            Log.i(TAG_AUDIO, "AcousticEchoCanceler not available on this device");
+        }
 
         isRecording.set(true);
         audioRecord.startRecording();
