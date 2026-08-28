@@ -141,8 +141,6 @@ export const translations: Record<Lang, Record<string, string>> = {
     // Settings
     settings: 'Settings',
     language: 'Language',
-    deleteAcc: 'Delete Account',
-    deleting: 'Deleting...',
 
     // Mic Monitor page
     micMonitorPageTitle: 'Microphone Monitor | AI Safety Companion',
@@ -288,8 +286,6 @@ export const translations: Record<Lang, Record<string, string>> = {
     // Settings
     settings: 'ဆက်တင်',
     language: 'ဘာသာစကား',
-    deleteAcc: 'အကောင့်ဖျက်ရန်',
-    deleting: 'ဖျက်နေသည်...',
 
     // Mic Monitor page
     micMonitorPageTitle: 'မိုက်ခရိုဖုန်း စောင့်ကြည့်ရေး | AI ကိုယ်ရေးလုံခြုံရေး Companion',
