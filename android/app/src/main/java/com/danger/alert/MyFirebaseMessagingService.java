@@ -52,15 +52,35 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
             Log.w(TAG, "No active user ID, saving token locally");
             return;
         }
-
-        FirebaseFirestore db = FirebaseFirestore.getInstance();
-        Map<String, Object> updates = new HashMap<>();
-        updates.put("fcmToken", token);
-
-        db.collection("users").document(userId)
-                .set(updates, com.google.firebase.firestore.SetOptions.merge())
-                .addOnSuccessListener(aVoid -> Log.i(TAG, "FCM token saved to Firestore for user: " + userId))
-                .addOnFailureListener(e -> Log.e(TAG, "Failed to save FCM token", e));
+        try {
+            android.content.Context context = com.google.firebase.FirebaseApp.getInstance().getApplicationContext();
+            android.content.SharedPreferences prefs = context.getSharedPreferences("capacitor", android.content.Context.MODE_PRIVATE);
+            String authToken = prefs.getString("firebase_auth_token", "");
+            String apiKey = prefs.getString("firebase_api_key", "");
+            String projectId = prefs.getString("firebase_project_id", "");
+            if (authToken == null || authToken.isEmpty() || apiKey == null || apiKey.isEmpty() || projectId == null || projectId.isEmpty()) {
+                Log.w(TAG, "No auth config available for Firestore save");
+                return;
+            }
+            String url = "https://firestore.googleapis.com/v1/projects/" + projectId + "/databases/(default)/documents/users/" + userId + "?key=" + apiKey;
+            String body = "{\"fields\":{\"fcmToken\":{\"stringValue\":\"" + token + "\"}}}";
+            java.net.HttpURLConnection c = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+            c.setRequestMethod("PATCH");
+            c.setRequestProperty("Content-Type", "application/json");
+            c.setRequestProperty("Authorization", "Bearer " + authToken);
+            c.setDoOutput(true);
+            java.io.OutputStream os = c.getOutputStream();
+            os.write(body.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            os.close();
+            int code = c.getResponseCode();
+            if (code >= 200 && code < 300) {
+                Log.i(TAG, "FCM token saved to Firestore via REST: " + userId);
+            } else {
+                Log.e(TAG, "Firestore REST save failed: " + code);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to save FCM token to Firestore", e);
+        }
     }
 
     private static String getActiveUserId() {
