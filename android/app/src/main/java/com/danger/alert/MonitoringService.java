@@ -9,7 +9,9 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
 import android.graphics.Color;
+import android.media.AudioDeviceInfo;
 import android.media.AudioFormat;
+import android.media.AudioManager;
 import android.media.AudioRecord;
 import android.media.audiofx.AcousticEchoCanceler;
 import android.media.MediaRecorder;
@@ -56,7 +58,7 @@ public class MonitoringService extends Service {
     private static final int ALERT_NOTIFICATION_ID = 2001;
     private static final int SAMPLE_RATE = 22050;
     private static final int DURATION_SECONDS = 3;
-    private static final int AUDIO_SOURCE = MediaRecorder.AudioSource.VOICE_RECOGNITION;
+    private static final int AUDIO_DEBUG_MODE = 2;
     private static final String DEFAULT_API_URL = "https://192.168.99.112:8000";
     private static final String HEALTH_PATH = "/ping";
     private static final long KEEPALIVE_INTERVAL_MS = 15 * 1000;
@@ -90,6 +92,7 @@ public class MonitoringService extends Service {
     private long lastAlertTime = 0;
     private int keepaliveFailures = 0;
     private boolean isOfflineAlerted = false;
+    private int originalAudioMode = -1;
 
     public static final String ACTION_START = "com.danger.alert.START_MONITORING";
     public static final String ACTION_STOP = "com.danger.alert.STOP_MONITORING";
@@ -244,12 +247,48 @@ public class MonitoringService extends Service {
                 AudioFormat.ENCODING_PCM_16BIT
         );
         bufferSize = Math.max(bufferSize, SAMPLE_RATE * 2);
-        Log.i(TAG_AUDIO, "AudioRecord config: sampleRate=" + SAMPLE_RATE
-                + " channel=MONO encoding=PCM_16BIT bufferSize=" + bufferSize);
+        Log.i(TAG_AUDIO, "AudioRecord bufferSize=" + bufferSize);
+
+        int selectedSource;
+        boolean enableAec;
+        String modeLabel;
+        int targetAudioMode = AudioManager.MODE_NORMAL;
+
+        switch (AUDIO_DEBUG_MODE) {
+            case 1:
+                selectedSource = MediaRecorder.AudioSource.VOICE_RECOGNITION;
+                enableAec = true;
+                modeLabel = "VOICE_RECOGNITION+AEC_ON";
+                targetAudioMode = AudioManager.MODE_IN_COMMUNICATION;
+                break;
+            case 2:
+                selectedSource = MediaRecorder.AudioSource.VOICE_COMMUNICATION;
+                enableAec = true;
+                modeLabel = "VOICE_COMMUNICATION+AEC_ON";
+                targetAudioMode = AudioManager.MODE_IN_COMMUNICATION;
+                break;
+            default:
+                selectedSource = MediaRecorder.AudioSource.VOICE_RECOGNITION;
+                enableAec = false;
+                modeLabel = "VOICE_RECOGNITION+AEC_OFF";
+                targetAudioMode = AudioManager.MODE_NORMAL;
+                break;
+        }
+
+        Log.i(TAG_AUDIO, "AUDIO_DEBUG_MODE=" + AUDIO_DEBUG_MODE + " config=" + modeLabel + " source=" + selectedSource);
+
+        AudioManager audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        if (audioManager != null && targetAudioMode != AudioManager.MODE_NORMAL) {
+            originalAudioMode = audioManager.getMode();
+            if (originalAudioMode != targetAudioMode) {
+                audioManager.setMode(targetAudioMode);
+                Log.i(TAG_AUDIO, "AudioManager mode set to MODE_IN_COMMUNICATION before AudioRecord init");
+            }
+        }
 
         try {
             audioRecord = new AudioRecord(
-                    AUDIO_SOURCE,
+                    selectedSource,
                     SAMPLE_RATE,
                     AudioFormat.CHANNEL_IN_MONO,
                     AudioFormat.ENCODING_PCM_16BIT,
@@ -263,7 +302,7 @@ public class MonitoringService extends Service {
         }
 
         if (audioRecord.getState() != AudioRecord.STATE_INITIALIZED) {
-            Log.e(TAG_AUDIO, "AudioRecord failed to initialize with VOICE_RECOGNITION, falling back to MIC");
+            Log.e(TAG_AUDIO, "AudioRecord failed to initialize with " + modeLabel + ", falling back to MIC");
             try {
                 audioRecord = new AudioRecord(
                         MediaRecorder.AudioSource.MIC,
@@ -279,19 +318,29 @@ public class MonitoringService extends Service {
                 return;
             }
         }
-        Log.i(TAG_AUDIO, "AudioRecord initialized successfully");
 
-        if (AcousticEchoCanceler.isAvailable()) {
+        boolean usedFallback = audioRecord.getAudioSource() == MediaRecorder.AudioSource.MIC;
+        Log.i(TAG_AUDIO, "AudioRecord initialized source=" + audioRecord.getAudioSource()
+                + " sessionId=" + audioRecord.getAudioSessionId()
+                + " usedFallback=" + usedFallback);
+
+        boolean aecActuallyEnabled = false;
+        if (enableAec && AcousticEchoCanceler.isAvailable()) {
             try {
                 AcousticEchoCanceler echoCanceler = AcousticEchoCanceler.create(audioRecord.getAudioSessionId());
                 echoCanceler.setEnabled(true);
-                Log.i(TAG_AUDIO, "AcousticEchoCanceler enabled");
+                aecActuallyEnabled = echoCanceler.getEnabled();
+                Log.i(TAG_AUDIO, "AcousticEchoCanceler enabled sessionId=" + audioRecord.getAudioSessionId() + " verified=" + aecActuallyEnabled);
             } catch (Exception e) {
                 Log.w(TAG_AUDIO, "Failed to enable AcousticEchoCanceler", e);
             }
+        } else if (AcousticEchoCanceler.isAvailable()) {
+            Log.i(TAG_AUDIO, "AcousticEchoCanceler available but disabled per config");
         } else {
             Log.i(TAG_AUDIO, "AcousticEchoCanceler not available on this device");
         }
+
+        logAudioDiagnostics(audioManager, aecActuallyEnabled);
 
         isRecording.set(true);
         audioRecord.startRecording();
@@ -299,12 +348,51 @@ public class MonitoringService extends Service {
         getSharedPreferences("capacitor", MODE_PRIVATE)
                 .edit().putBoolean("monitoring_running", true).apply();
         BackgroundMonitorPlugin.notifyStateChange(true);
-        Log.i(TAG, "Monitoring started");
+        Log.i(TAG, "Monitoring started config=" + modeLabel);
         NotificationStrings ns2 = new NotificationStrings(this);
         updateNotification(ns2.listeningForDangerSounds());
 
         executor.execute(this::recordingLoop);
         startKeepAlive();
+    }
+
+    private void logAudioDiagnostics(AudioManager audioManager, boolean aecEnabled) {
+        if (audioManager == null) {
+            Log.w(TAG_AUDIO, "AudioManager null, cannot log diagnostics");
+            return;
+        }
+        Log.i(TAG_AUDIO, "=== Audio Diagnostics ===");
+        Log.i(TAG_AUDIO, "Android API=" + Build.VERSION.SDK_INT);
+        Log.i(TAG_AUDIO, "AudioManager mode=" + audioManager.getMode());
+        Log.i(TAG_AUDIO, "Speakerphone on=" + audioManager.isSpeakerphoneOn());
+        int musicVol = audioManager.getStreamVolume(android.media.AudioManager.STREAM_MUSIC);
+        int musicMax = audioManager.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC);
+        Log.i(TAG_AUDIO, "Music volume=" + musicVol + "/" + musicMax);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            AudioDeviceInfo[] devices = audioManager.getDevices(AudioManager.GET_DEVICES_ALL);
+            for (AudioDeviceInfo device : devices) {
+                StringBuilder sb = new StringBuilder();
+                switch (device.getType()) {
+                    case AudioDeviceInfo.TYPE_BUILTIN_SPEAKER: sb.append("BUILTIN_SPEAKER"); break;
+                    case AudioDeviceInfo.TYPE_BUILTIN_MIC: sb.append("BUILTIN_MIC"); break;
+                    case AudioDeviceInfo.TYPE_WIRED_HEADSET: sb.append("WIRED_HEADSET"); break;
+                    case AudioDeviceInfo.TYPE_WIRED_HEADPHONES: sb.append("WIRED_HEADPHONES"); break;
+                    case AudioDeviceInfo.TYPE_BLUETOOTH_SCO: sb.append("BT_SCO"); break;
+                    case AudioDeviceInfo.TYPE_BLUETOOTH_A2DP: sb.append("BT_A2DP"); break;
+                    default: sb.append("OTHER(").append(device.getType()).append(")"); break;
+                }
+                sb.append(" id=").append(device.getId());
+                sb.append(" name=").append(device.getProductName());
+                Log.i(TAG_AUDIO, "AudioDevice: " + sb.toString());
+            }
+        }
+
+        Log.i(TAG_AUDIO, "AudioRecord source=" + audioRecord.getAudioSource()
+                + " sessionId=" + audioRecord.getAudioSessionId());
+        Log.i(TAG_AUDIO, "AEC available=" + AcousticEchoCanceler.isAvailable()
+                + " enabled=" + aecEnabled);
+        Log.i(TAG_AUDIO, "========================");
     }
 
     private void startKeepAlive() {
@@ -678,6 +766,13 @@ public class MonitoringService extends Service {
                 Log.e(TAG, "Error releasing AudioRecord", e);
             }
             audioRecord = null;
+        }
+
+        AudioManager audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        if (audioManager != null && originalAudioMode != -1) {
+            audioManager.setMode(originalAudioMode);
+            Log.i(TAG_AUDIO, "AudioManager mode restored to " + originalAudioMode);
+            originalAudioMode = -1;
         }
 
         if (executor != null) {
