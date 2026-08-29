@@ -117,6 +117,15 @@ export const translations: Record<Lang, Record<string, string>> = {
     deletedUser:'Account deleted',
     deleteAcc: 'Delete Account',
     deleting:'Deleting...',
+    deleteConfirmTitle: 'Confirm Password',
+    deleteConfirmDesc: 'Enter your password to delete your account permanently.',
+    deletePasswordPlaceholder: 'Enter your password',
+    deletePasswordRequired: 'Password is required',
+    deleteInvalidPassword: 'Invalid password',
+    cancel: 'Cancel',
+    deleteAccountTitle: 'Delete Account',
+    deleteAccountDesc: 'This action cannot be undone. All your data will be permanently removed.',
+    continue: 'Continue',
 
     // Trusted Group
     trustedGroupTitle: 'Trusted Group Management',
@@ -262,6 +271,15 @@ export const translations: Record<Lang, Record<string, string>> = {
     deletedUser:'အကောင့်ဖျက်ထားသည်',
     deleteAcc: 'အကောင့်ဖျက်မည်',
     deleting:'အကောင့်ဖျက်နေသည်...',
+    deleteConfirmTitle: 'စကားဝှက်အတည်ပြုရန်',
+    deleteConfirmDesc: 'သင့်အကောင့်ကို အမြဲတမ်း ဖျက်ရန် သင့်စကားဝှက်ကို ထည့်ပါ။',
+    deletePasswordPlaceholder: 'စကားဝှက်ထည့်ပါ',
+    deletePasswordRequired: 'စကားဝှက်လိုအပ်ပါသည်',
+    deleteInvalidPassword: 'စကားဝှက်မှားနေပါသည်',
+    cancel: 'မလုပ်တော့ပါ',
+    deleteAccountTitle: 'အကောင့်ဖျက်မည်',
+    deleteAccountDesc: 'ဤလုပ်ဆောင်ချက်ကို ပြန်လည်ပြင်၍မရပါ။ သင့်ဒေတာအားလုံး အမြဲတမ်း ဖယ်ထုတ်ပြီးသွားပါမည်။',
+    continue: 'ဆက်လက်လုပ်ဆောင်ရန်',
 
     // Trusted Group
     trustedGroupTitle: 'ယုံကြည်ရသူများအုပ်စု စီမံခြင်း',

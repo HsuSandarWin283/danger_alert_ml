@@ -5,6 +5,7 @@ import { useAuth } from '@/app/auth-provider'
 import { useRouter } from 'next/navigation'
 import { logout } from '@/app/lib/auth'
 import { deleteDoc, doc, collection, query, where, getDocs } from 'firebase/firestore'
+import { reauthenticateWithCredential, EmailAuthProvider, deleteUser } from 'firebase/auth'
 import { db } from '@/app/lib/firebase'
 import { useLang } from '@/app/lib/LanguageProvider'
 import LanguageSwitch from '@/app/components/LanguageSwitch'
@@ -15,6 +16,10 @@ export default function SettingsPage() {
   const router = useRouter()
   const { t } = useLang()
   const [deleting, setDeleting] = useState(false)
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
+  const [showPasswordModal, setShowPasswordModal] = useState(false)
+  const [password, setPassword] = useState('')
+  const [passwordError, setPasswordError] = useState('')
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -42,9 +47,32 @@ export default function SettingsPage() {
 
   const handleDeleteAccount = async () => {
     if (!user) return
-    const confirmed = window.confirm('Are you sure you want to delete your account? This action cannot be undone.')
-    if (!confirmed) return
+    setShowConfirmModal(true)
+  }
+
+  const proceedToPassword = () => {
+    setShowConfirmModal(false)
+    setShowPasswordModal(true)
+    setPassword('')
+    setPasswordError('')
+  }
+
+  const confirmDelete = async () => {
+    if (!user || !password) {
+      setPasswordError(t('deletePasswordRequired'))
+      return
+    }
     setDeleting(true)
+    setPasswordError('')
+    try {
+      const credential = EmailAuthProvider.credential(user.email || '', password)
+      await reauthenticateWithCredential(user, credential)
+    } catch (err) {
+      console.error('Reauthentication failed', err)
+      setPasswordError(t('deleteInvalidPassword'))
+      setDeleting(false)
+      return
+    }
     try {
       const ownedQuery = query(collection(db, 'group_members'), where('groupId', '==', user.uid))
       const memberQuery = query(collection(db, 'group_members'), where('userId', '==', user.uid))
@@ -67,13 +95,23 @@ export default function SettingsPage() {
       return
     }
     try {
-      await user.delete()
+      await deleteUser(user)
     } catch (err) {
       console.error('Failed to delete Firebase Auth user', err)
-      alert('Profile deleted, but auth deletion failed. You may need to reauthenticate.')
+      alert('Account deletion failed. Please try again.')
+      setDeleting(false)
+      return
     }
+    setShowPasswordModal(false)
     router.replace('/login')
     router.refresh()
+  }
+
+  const cancelDelete = () => {
+    setShowPasswordModal(false)
+    setPassword('')
+    setPasswordError('')
+    setDeleting(false)
   }
 
   return (
@@ -136,6 +174,83 @@ export default function SettingsPage() {
           </button>
         </div>
       </div>
+
+      {showConfirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-sm w-full">
+            <div className="text-center mb-6">
+              <div className="text-5xl mb-4">⚠️</div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-2">{t('deleteAccountTitle')}</h3>
+              <p className="text-gray-600">{t('deleteAccountDesc')}</p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                disabled={deleting}
+                className="flex-1 bg-gray-200 text-gray-800 py-3 rounded-xl text-lg font-semibold hover:bg-gray-300 transition disabled:opacity-50"
+              >
+                {t('cancel')}
+              </button>
+              <button
+                onClick={proceedToPassword}
+                disabled={deleting}
+                className="flex-1 bg-red-600 text-white py-3 rounded-xl text-lg font-semibold hover:bg-red-700 transition disabled:opacity-50"
+              >
+                {t('continue')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPasswordModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-sm w-full">
+            <div className="flex justify-end mb-2">
+              <button
+                onClick={cancelDelete}
+                disabled={deleting}
+                className="text-gray-400 hover:text-gray-600 text-2xl font-bold w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="text-center mb-6">
+              <div className="text-5xl mb-4">🔒</div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-2">{t('deleteConfirmTitle')}</h3>
+              <p className="text-gray-600">{t('deleteConfirmDesc')}</p>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value)
+                    setPasswordError('')
+                  }}
+                  placeholder={t('deletePasswordPlaceholder')}
+                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-red-500 focus:outline-none text-gray-800"
+                />
+                {passwordError && (
+                  <p className="text-red-500 text-sm mt-2 text-center">{passwordError}</p>
+                )}
+              </div>
+
+              <button
+                onClick={confirmDelete}
+                disabled={deleting}
+                className="w-full bg-red-600 text-white py-3 rounded-xl text-lg font-semibold hover:bg-red-700 transition disabled:opacity-50"
+              >
+                {deleting ? t('deleting') : t('deleteAcc')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
