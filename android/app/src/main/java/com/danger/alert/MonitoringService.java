@@ -658,7 +658,8 @@ public class MonitoringService extends Service {
                         .setContentIntent(contentPending)
                         .setAutoCancel(true)
                         .setVibrate(new long[]{0, 500, 200, 500})
-                        .setLights(Color.RED, 500, 500);
+                        .setLights(Color.RED, 500, 500)
+                        .setVisibility(NotificationCompat.VISIBILITY_PUBLIC);
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     alertBuilder.setDefaults(Notification.DEFAULT_VIBRATE | Notification.DEFAULT_SOUND);

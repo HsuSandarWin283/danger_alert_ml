@@ -141,7 +141,7 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
         alertIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
 
         PendingIntent fullScreenPending = PendingIntent.getActivity(
-                this, 1, alertIntent,
+                this, 0, alertIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE
         );
 
@@ -162,7 +162,8 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
                 .setAutoCancel(true)
                 .setVibrate(new long[]{0, 500, 200, 500})
                 .setLights(Color.RED, 500, 500)
-                .setDefaults(android.app.Notification.DEFAULT_VIBRATE | android.app.Notification.DEFAULT_SOUND);
+                .setDefaults(android.app.Notification.DEFAULT_VIBRATE | android.app.Notification.DEFAULT_SOUND)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC);
 
         try {
             NotificationManagerCompat.from(this).notify(HELP_NOTIFICATION_ID, builder.build());
@@ -181,7 +182,11 @@ public class MyFirebaseMessagingService extends FirebaseMessagingService {
     private void createHelpChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationManager manager = getSystemService(NotificationManager.class);
-            if (manager != null && manager.getNotificationChannel(HELP_CHANNEL_ID) == null) {
+            if (manager != null) {
+                NotificationChannel existing = manager.getNotificationChannel(HELP_CHANNEL_ID);
+                if (existing != null) {
+                    manager.deleteNotificationChannel(HELP_CHANNEL_ID);
+                }
                 NotificationChannel channel = new NotificationChannel(
                         HELP_CHANNEL_ID, "Help Messages",
                         NotificationManager.IMPORTANCE_HIGH);
