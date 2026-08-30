@@ -63,7 +63,7 @@ public class BackgroundMonitorPlugin extends Plugin {
 
     @PluginMethod
     public void startMonitoring(PluginCall call) {
-        String apiUrl = call.getString("apiUrl", "http://192.168.99.112:8000");
+        String apiUrl = call.getString("apiUrl", "http://10.104.65.161:8000");
 
         Intent intent = new Intent(getContext(), MonitoringService.class);
         intent.setAction(MonitoringService.ACTION_START);

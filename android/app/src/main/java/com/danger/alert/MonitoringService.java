@@ -58,14 +58,13 @@ public class MonitoringService extends Service {
     private static final int ALERT_NOTIFICATION_ID = 2001;
     private static final int SAMPLE_RATE = 22050;
     private static final int DURATION_SECONDS = 3;
-    private static final int AUDIO_DEBUG_MODE = 2;
-    private static final String DEFAULT_API_URL = "https://192.168.99.112:8000";
+    private static final int AUDIO_DEBUG_MODE = 0;
+    private static final String DEFAULT_API_URL = "https://10.104.65.161:8000";
     private static final String HEALTH_PATH = "/ping";
     private static final long KEEPALIVE_INTERVAL_MS = 15 * 1000;
     private static final double RMS_THRESHOLD = 0.004;
     private static final double CONFIDENCE_THRESHOLD = 0.88;
-    private static final long DUPLICATE_ALERT_MS = 10000;
-    private static final long DANGER_COOLDOWN_MS = 3000;
+    private static final long DANGER_COOLDOWN_MS = 0;
     private static final long ANALYSIS_INTERVAL_MS = 1000;
     private static final java.util.Set<String> DANGER_LABELS = new java.util.HashSet<>(
         java.util.Arrays.asList("accident", "gunshot", "scream")
@@ -86,13 +85,8 @@ public class MonitoringService extends Service {
     private short[] circularBuffer;
     private int circularBufferIndex = 0;
     private long lastAnalysisTime = 0;
-    private boolean isDangerState = false;
-    private long lastDangerTime = 0;
-    private String lastAlertLabel = null;
-    private long lastAlertTime = 0;
     private int keepaliveFailures = 0;
     private boolean isOfflineAlerted = false;
-    private int originalAudioMode = -1;
 
     public static final String ACTION_START = "com.danger.alert.START_MONITORING";
     public static final String ACTION_STOP = "com.danger.alert.STOP_MONITORING";
@@ -252,38 +246,16 @@ public class MonitoringService extends Service {
         int selectedSource;
         boolean enableAec;
         String modeLabel;
-        int targetAudioMode = AudioManager.MODE_NORMAL;
 
-        switch (AUDIO_DEBUG_MODE) {
-            case 1:
-                selectedSource = MediaRecorder.AudioSource.VOICE_RECOGNITION;
-                enableAec = true;
-                modeLabel = "VOICE_RECOGNITION+AEC_ON";
-                targetAudioMode = AudioManager.MODE_IN_COMMUNICATION;
-                break;
-            case 2:
-                selectedSource = MediaRecorder.AudioSource.VOICE_COMMUNICATION;
-                enableAec = true;
-                modeLabel = "VOICE_COMMUNICATION+AEC_ON";
-                targetAudioMode = AudioManager.MODE_IN_COMMUNICATION;
-                break;
-            default:
-                selectedSource = MediaRecorder.AudioSource.VOICE_RECOGNITION;
-                enableAec = false;
-                modeLabel = "VOICE_RECOGNITION+AEC_OFF";
-                targetAudioMode = AudioManager.MODE_NORMAL;
-                break;
-        }
+        selectedSource = MediaRecorder.AudioSource.VOICE_RECOGNITION;
+        enableAec = false;
+        modeLabel = "VOICE_RECOGNITION+AEC_OFF";
 
         Log.i(TAG_AUDIO, "AUDIO_DEBUG_MODE=" + AUDIO_DEBUG_MODE + " config=" + modeLabel + " source=" + selectedSource);
 
         AudioManager audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-        if (audioManager != null && targetAudioMode != AudioManager.MODE_NORMAL) {
-            originalAudioMode = audioManager.getMode();
-            if (originalAudioMode != targetAudioMode) {
-                audioManager.setMode(targetAudioMode);
-                Log.i(TAG_AUDIO, "AudioManager mode set to MODE_IN_COMMUNICATION before AudioRecord init");
-            }
+        if (audioManager != null) {
+            Log.i(TAG_AUDIO, "AudioManager mode=" + audioManager.getMode());
         }
 
         try {
@@ -512,11 +484,6 @@ public class MonitoringService extends Service {
 
         if (rms < RMS_THRESHOLD) {
             Log.i(TAG_RMS, "RMS BELOW threshold -> SKIP prediction");
-            if (isDangerState && (System.currentTimeMillis() - lastDangerTime > DANGER_COOLDOWN_MS)) {
-                isDangerState = false;
-                lastAlertLabel = null;
-                Log.i(TAG_MONITOR, "STATE=NORMAL cooldownExpired=true");
-            }
             return;
         }
 
@@ -665,80 +632,50 @@ public class MonitoringService extends Service {
 
             long now = System.currentTimeMillis();
 
-            Log.i(TAG_MONITOR, "serverIsDanger=" + serverIsDanger + " state=" + (isDangerState ? "DANGER" : "NORMAL"));
+            Log.i(TAG_MONITOR, "serverIsDanger=" + serverIsDanger + " prediction=" + prediction + " confidence=" + confidence);
 
             if (serverIsDanger) {
-                lastDangerTime = now;
+                Log.i(TAG_MONITOR, "ACTION=TRIGGER_ALERT prediction=" + prediction + " confidence=" + confidence);
 
-                if (!isDangerState) {
-                    boolean isDuplicate = false;
-                    if (lastAlertLabel != null && lastAlertLabel.equals(prediction)) {
-                        isDuplicate = (now - lastAlertTime) < DUPLICATE_ALERT_MS;
-                    }
+                NotificationStrings ns = new NotificationStrings(this);
+                Intent alertIntent = new Intent(this, DangerAlertActivity.class);
+                alertIntent.putExtra("danger_type", prediction);
+                alertIntent.putExtra("confidence", confidence);
+                alertIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
 
-                    if (!isDuplicate) {
-                        isDangerState = true;
-                        lastAlertLabel = prediction;
-                        lastAlertTime = now;
+                PendingIntent contentPending = PendingIntent.getActivity(
+                        this, 0, alertIntent,
+                        PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE
+                );
 
-                        Log.i(TAG_MONITOR, "STATE=DANGER ACTION=TRIGGER_ALERT prediction=" + prediction + " confidence=" + confidence);
+                NotificationCompat.Builder alertBuilder = new NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
+                        .setContentTitle(ns.dangerDetectedTitle(prediction))
+                        .setContentText(ns.areYouOk())
+                        .setSmallIcon(android.R.drawable.ic_dialog_alert)
+                        .setPriority(NotificationCompat.PRIORITY_MAX)
+                        .setCategory(NotificationCompat.CATEGORY_ALARM)
+                        .setFullScreenIntent(contentPending, true)
+                        .setContentIntent(contentPending)
+                        .setAutoCancel(true)
+                        .setVibrate(new long[]{0, 500, 200, 500})
+                        .setLights(Color.RED, 500, 500);
 
-                        NotificationStrings ns = new NotificationStrings(this);
-                        Intent alertIntent = new Intent(this, DangerAlertActivity.class);
-                        alertIntent.putExtra("danger_type", prediction);
-                        alertIntent.putExtra("confidence", confidence);
-                        alertIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    alertBuilder.setDefaults(Notification.DEFAULT_VIBRATE | Notification.DEFAULT_SOUND);
+                }
 
-                        PendingIntent contentPending = PendingIntent.getActivity(
-                                this, 0, alertIntent,
-                                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE
-                        );
+                NotificationManager manager = getSystemService(NotificationManager.class);
+                if (manager != null) {
+                    manager.notify(ALERT_NOTIFICATION_ID, alertBuilder.build());
+                }
 
-                        NotificationCompat.Builder alertBuilder = new NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
-                                .setContentTitle(ns.dangerDetectedTitle(prediction))
-                                .setContentText(ns.areYouOk())
-                                .setSmallIcon(android.R.drawable.ic_dialog_alert)
-                                .setPriority(NotificationCompat.PRIORITY_MAX)
-                                .setCategory(NotificationCompat.CATEGORY_ALARM)
-                                .setFullScreenIntent(contentPending, true)
-                                .setContentIntent(contentPending)
-                                .setAutoCancel(true)
-                                .setVibrate(new long[]{0, 500, 200, 500})
-                                .setLights(Color.RED, 500, 500);
-
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            alertBuilder.setDefaults(Notification.DEFAULT_VIBRATE | Notification.DEFAULT_SOUND);
-                        }
-
-                        NotificationManager manager = getSystemService(NotificationManager.class);
-                        if (manager != null) {
-                            manager.notify(ALERT_NOTIFICATION_ID, alertBuilder.build());
-                        }
-
-                        try {
-                            startActivity(alertIntent);
-                        } catch (Exception e) {
-                            Log.w(TAG, "Cannot start activity from background", e);
-                        }
-                    } else {
-                        Log.i(TAG_MONITOR, "STATE=DANGER ACTION=DUPLICATE_SUPPRESSED prediction=" + prediction + " confidence=" + confidence);
-                    }
-                } else {
-                    Log.i(TAG_MONITOR, "STATE=DANGER ACTION=IGNORE prediction=" + prediction + " confidence=" + confidence);
+                try {
+                    startActivity(alertIntent);
+                } catch (Exception e) {
+                    Log.w(TAG, "Cannot start activity from background", e);
                 }
             } else {
-                if (isDangerState) {
-                    long timeSinceDanger = now - lastDangerTime;
-                    if (timeSinceDanger > DANGER_COOLDOWN_MS) {
-                        isDangerState = false;
-                        lastAlertLabel = null;
-                        Log.i(TAG_MONITOR, "STATE=NORMAL cooldownExpired=true");
-                    } else {
-                        Log.i(TAG_MONITOR, "STATE=DANGER cooldownRemaining=" + (DANGER_COOLDOWN_MS - timeSinceDanger) + "ms");
-                    }
-                } else {
-                    Log.i(TAG_MONITOR, "STATE=NORMAL ACTION=IGNORE prediction=" + prediction + " confidence=" + confidence + " reason=" + reason);
-                }
+                Log.i(TAG_MONITOR, "STATE=NORMAL ACTION=IGNORE prediction=" + prediction + " confidence=" + confidence + " reason=" + reason);
             }
         } catch (Exception e) {
             Log.e(TAG, "Error parsing result", e);
@@ -769,10 +706,8 @@ public class MonitoringService extends Service {
         }
 
         AudioManager audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-        if (audioManager != null && originalAudioMode != -1) {
-            audioManager.setMode(originalAudioMode);
-            Log.i(TAG_AUDIO, "AudioManager mode restored to " + originalAudioMode);
-            originalAudioMode = -1;
+        if (audioManager != null) {
+            Log.i(TAG_AUDIO, "AudioManager mode=" + audioManager.getMode());
         }
 
         if (executor != null) {
@@ -788,10 +723,6 @@ public class MonitoringService extends Service {
         circularBuffer = null;
         circularBufferIndex = 0;
         lastAnalysisTime = 0;
-        isDangerState = false;
-        lastDangerTime = 0;
-        lastAlertLabel = null;
-        lastAlertTime = 0;
         Log.i(TAG_MONITOR, "Monitoring stopped");
     }
 

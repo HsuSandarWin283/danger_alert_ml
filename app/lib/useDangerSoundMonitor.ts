@@ -39,15 +39,13 @@ type UseDangerSoundMonitorReturn = {
   stopMonitoring: () => void;
 };
 
-const DEFAULT_PREDICT_URL = 'http://192.168.99.112:8000/predict';
+const DEFAULT_PREDICT_URL = 'http://10.104.65.161:8000/predict';
 const WINDOW_SECONDS = 3;
 const ANALYSIS_HOP_MS = 1000;
 const RMS_CHECK_MS = 200;
 const SCRIPT_PROCESSOR_BUFFER_SIZE = 4096;
 const RMS_THRESHOLD = 0.004;
 const CONFIDENCE_THRESHOLD = 0.88;
-const DUPLICATE_ALERT_MS = 10000;
-const DANGER_COOLDOWN_MS = 3000;
 const DANGER_LABELS = new Set(['accident', 'gunshot', 'scream']);
 const MAX_BUFFER_SECONDS = 7;
 
@@ -163,13 +161,10 @@ export function useDangerSoundMonitor(
   const pendingSamplesRef = useRef<number[]>([]);
   const currentRmsRef = useRef(0);
   const isPredictingRef = useRef(false);
-  const lastAlertRef = useRef<{ label: string; timestamp: number } | null>(null);
   const mountedRef = useRef(false);
   const closingAudioContextsRef = useRef<WeakSet<AudioContext>>(new WeakSet());
   const startTimeRef = useRef<number>(0);
   const lastAnalysisTimeRef = useRef<number>(0);
-  const dangerStateRef = useRef<'NORMAL' | 'DANGER'>('NORMAL');
-  const lastDangerTimeRef = useRef<number>(0);
   const WARMUP_MS = 5000;
   const MONITORING_KEY = 'danger_monitoring_active';
 
@@ -221,9 +216,6 @@ export function useDangerSoundMonitor(
 
     pendingSamplesRef.current = [];
     isPredictingRef.current = false;
-    lastAlertRef.current = null;
-    dangerStateRef.current = 'NORMAL';
-    lastDangerTimeRef.current = 0;
     lastAnalysisTimeRef.current = 0;
     startTimeRef.current = 0;
 
@@ -484,17 +476,6 @@ export function useDangerSoundMonitor(
         );
 
         if (!rmsPassed) {
-          if (dangerStateRef.current === 'DANGER') {
-            const timeSinceDanger = Date.now() - lastDangerTimeRef.current;
-            if (timeSinceDanger > DANGER_COOLDOWN_MS) {
-              dangerStateRef.current = 'NORMAL';
-              console.log(`[danger-monitor] STATE=NORMAL cooldownExpired=true`);
-            } else {
-              console.log(
-                `[danger-monitor] STATE=DANGER cooldownRemaining=${DANGER_COOLDOWN_MS - timeSinceDanger}ms`,
-              );
-            }
-          }
           return;
         }
 
@@ -528,75 +509,36 @@ export function useDangerSoundMonitor(
 
             console.log(
               `[danger-monitor] label=${prediction.prediction} confidence=${prediction.confidence.toFixed(4)} ` +
-                `rms=${rms.toFixed(4)} rmsPassed=true serverIsDanger=${serverIsDanger} reason=${data.reason || 'unknown'} ` +
-                `state=${dangerStateRef.current}`,
+                `rms=${rms.toFixed(4)} rmsPassed=true serverIsDanger=${serverIsDanger} reason=${data.reason || 'unknown'}`,
             );
 
             if (serverIsDanger) {
-              lastDangerTimeRef.current = now;
+              const payload: DangerAlertPayload = {
+                detectedAnswer: formatLabel(prediction.prediction),
+                confidence: prediction.confidence,
+                probabilities: prediction.probabilities,
+                rms,
+              };
 
-              if (dangerStateRef.current === 'NORMAL') {
-                const lastAlert = lastAlertRef.current;
-                const isDuplicate =
-                  lastAlert &&
-                  lastAlert.label === prediction.prediction &&
-                  now - lastAlert.timestamp < DUPLICATE_ALERT_MS;
+              console.log(
+                `[danger-monitor] ACTION=TRIGGER_DANGER label=${prediction.prediction} confidence=${prediction.confidence.toFixed(4)}`,
+              );
 
-                if (!isDuplicate) {
-                  dangerStateRef.current = 'DANGER';
-                  lastAlertRef.current = {
-                    label: prediction.prediction,
-                    timestamp: now,
-                  };
-
-                  const payload: DangerAlertPayload = {
-                    detectedAnswer: formatLabel(prediction.prediction),
-                    confidence: prediction.confidence,
-                    probabilities: prediction.probabilities,
-                    rms,
-                  };
-
-                  console.log(
-                    `[danger-monitor] STATE=DANGER ACTION=TRIGGER_DANGER label=${prediction.prediction} confidence=${prediction.confidence.toFixed(4)}`,
-                  );
-
-                  if (!Capacitor.isNativePlatform()) {
-                    window.dispatchEvent(
-                      new CustomEvent('danger-detected', {
-                        detail: payload,
-                      }),
-                    );
-                  }
-
-                  if (mountedRef.current) {
-                    onDangerDetected?.(payload);
-                  }
-                } else {
-                  console.log(
-                    `[danger-monitor] STATE=DANGER ACTION=DUPLICATE_SUPPRESSED label=${prediction.prediction}`,
-                  );
-                }
-              } else {
-                console.log(
-                  `[danger-monitor] STATE=DANGER ACTION=IGNORE label=${prediction.prediction}`,
+              if (!Capacitor.isNativePlatform()) {
+                window.dispatchEvent(
+                  new CustomEvent('danger-detected', {
+                    detail: payload,
+                  }),
                 );
+              }
+
+              if (mountedRef.current) {
+                onDangerDetected?.(payload);
               }
             } else {
-              if (dangerStateRef.current === 'DANGER') {
-                const timeSinceDanger = now - lastDangerTimeRef.current;
-                if (timeSinceDanger > DANGER_COOLDOWN_MS) {
-                  dangerStateRef.current = 'NORMAL';
-                  console.log(`[danger-monitor] STATE=NORMAL cooldownExpired=true`);
-                } else {
-                  console.log(
-                    `[danger-monitor] STATE=DANGER cooldownRemaining=${DANGER_COOLDOWN_MS - timeSinceDanger}ms`,
-                  );
-                }
-              } else {
-                console.log(
-                  `[danger-monitor] STATE=NORMAL ACTION=IGNORE label=${prediction.prediction} confidence=${prediction.confidence.toFixed(4)}`,
-                );
-              }
+              console.log(
+                `[danger-monitor] STATE=NORMAL ACTION=IGNORE label=${prediction.prediction} confidence=${prediction.confidence.toFixed(4)}`,
+              );
             }
           } catch (err) {
             const message = err instanceof Error ? err.message : 'Prediction failed';
